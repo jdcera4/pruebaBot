@@ -1,0 +1,92 @@
+<div class="messages-container">
+  <h2>Mensajes enviados</h2>
+  
+  <!-- Search bar (only show if we have messages) -->
+  <div class="search-bar" *ngIf="messages.length > 0">
+    <input 
+      type="text" 
+      placeholder="Buscar por destinatario o texto" 
+      (keyup.enter)="onSearch(getInputValue($event))" 
+      (blur)="onSearch(getInputValue($event))" 
+    />
+  </div>
+  
+  <!-- Loading state -->
+  <div *ngIf="isLoading" class="loading">
+    <div class="spinner"></div>
+    <span>Cargando mensajes...</span>
+  </div>
+  
+  <!-- Error message -->
+  <div *ngIf="errorMsg && !isLoading" class="info-message error">
+    <i class="icon-warning">⚠️</i>
+    <div class="message-content">
+      <p>{{ errorMsg }}</p>
+      <p class="small">Si el problema persiste, por favor contacte al soporte técnico.</p>
+    </div>
+  </div>
+  
+  <!-- No messages state -->
+  <div *ngIf="!isLoading && messages.length === 0 && !errorMsg" class="info-message">
+    <i class="icon-info">ℹ️</i>
+    <div class="message-content">
+      <p>No hay mensajes para mostrar.</p>
+      <p class="small">Los mensajes enviados aparecerán aquí.</p>
+    </div>
+  </div>
+  
+  <!-- Messages list -->
+  <ul *ngIf="!isLoading && messages.length > 0" class="message-list">
+    <li *ngFor="let msg of filteredMessages | slice:(page-1)*limit:(page)*limit" class="message-item">
+      <div class="message-header">
+        <span class="to">
+          <span class="label">Para:</span>
+          <strong>{{ msg.to || 'Sin destinatario' }}</strong>
+        </span>
+        <span class="status" [class]="'status-' + (msg.status || 'unknown')">
+          <span class="status-dot"></span>
+          {{ msg.status || 'desconocido' | titlecase }}
+        </span>
+        <span class="date" *ngIf="msg.sentAt">
+          {{ msg.sentAt | date:'short' }}
+        </span>
+      </div>
+      
+      <div class="message-body">
+        <p class="text" *ngIf="msg.message">{{ msg.message }}</p>
+        <p class="empty-message" *ngIf="!msg.message">Sin contenido de mensaje</p>
+      </div>
+      
+      <div *ngIf="msg.mediaUrl" class="media-attachment">
+        <i class="icon-attachment">📎</i>
+        <a [href]="msg.mediaUrl" target="_blank" rel="noopener noreferrer">
+          Ver archivo adjunto
+        </a>
+      </div>
+    </li>
+  </ul>
+  
+  <!-- Pagination -->
+  <div class="pagination" *ngIf="!isLoading && filteredMessages.length > limit">
+    <button 
+      (click)="goToPage(page - 1)" 
+      [disabled]="page === 1"
+      class="pagination-button"
+    >
+      &larr; Anterior
+    </button>
+    
+    <span class="page-info">
+      Página {{ page }} de {{ totalPages }}
+      <span class="total-items">({{ filteredMessages.length }} mensajes en total)</span>
+    </span>
+    
+    <button 
+      (click)="goToPage(page + 1)" 
+      [disabled]="page === totalPages"
+      class="pagination-button"
+    >
+      Siguiente &rarr;
+    </button>
+  </div>
+</div>

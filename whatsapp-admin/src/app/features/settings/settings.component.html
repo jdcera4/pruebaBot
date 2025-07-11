@@ -1,0 +1,241 @@
+<div class="settings-container">
+  <div class="settings-card">
+    <header class="card-header">
+      <h2>Configuración del Bot</h2>
+      <p class="subtitle">Administra la configuración de tu bot de WhatsApp</p>
+      
+      <!-- Navigation Tabs -->
+      <div class="tabs">
+        <button 
+          class="tab-button" 
+          [class.active]="activeTab === 'general'"
+          (click)="activeTab = 'general'">
+          Configuración General
+        </button>
+        <button 
+          class="tab-button" 
+          [class.active]="activeTab === 'flow'"
+          (click)="activeTab = 'flow'"
+          *ngIf="flowForm">
+          Flujo de Conversación
+        </button>
+      </div>
+    </header>
+    
+    <div class="card-content">
+      <!-- General Settings Tab -->
+      <div *ngIf="activeTab === 'general'" class="tab-content">
+        <form [formGroup]="settingsForm" (ngSubmit)="saveSettings()" class="settings-form">
+          <!-- Business Information -->
+          <div class="form-section">
+            <h3>Información del Negocio</h3>
+            <div class="form-group">
+              <label for="businessName">Nombre del Negocio *</label>
+              <input id="businessName" type="text" formControlName="businessName" 
+                     placeholder="Ej: Mi Empresa S.A." />
+              <div class="error" *ngIf="settingsForm.get('businessName')?.hasError('required') && settingsForm.get('businessName')?.touched">
+                El nombre del negocio es requerido
+              </div>
+            </div>
+          </div>
+
+          <!-- Business Hours -->
+          <div class="form-section">
+            <h3>Horario de Atención</h3>
+            <div formGroupName="businessHours" class="nested-form">
+              <div class="form-group toggle-group">
+                <label for="businessHoursEnabled">Activar horario de atención</label>
+                <input id="businessHoursEnabled" type="checkbox" formControlName="enabled" />
+              </div>
+              
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="startTime">Hora de inicio *</label>
+                  <input id="startTime" type="time" formControlName="startTime" 
+                         [disabled]="!settingsForm.get('businessHours.enabled')?.value" />
+                </div>
+                
+                <div class="form-group">
+                  <label for="endTime">Hora de fin *</label>
+                  <input id="endTime" type="time" formControlName="endTime" 
+                         [disabled]="!settingsForm.get('businessHours.enabled')?.value" />
+                </div>
+                
+                <div class="form-group">
+                  <label for="timeZone">Zona horaria *</label>
+                  <select id="timeZone" formControlName="timeZone" 
+                          [disabled]="!settingsForm.get('businessHours.enabled')?.value">
+                    <option *ngFor="let tz of timezones" [value]="tz.value">{{ tz.label }}</option>
+                  </select>
+                </div>
+              </div>
+              
+              <div class="form-group">
+                <label for="awayMessage">Mensaje fuera de horario *</label>
+                <textarea id="awayMessage" formControlName="awayMessage" rows="3"
+                         [disabled]="!settingsForm.get('businessHours.enabled')?.value"
+                         placeholder="Mensaje a mostrar cuando el negocio está cerrado"></textarea>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Auto-Reply Settings -->
+          <div class="form-section">
+            <h3>Configuración de Auto-Respuesta</h3>
+            <div formGroupName="autoReply" class="nested-form">
+              <div class="form-group toggle-group">
+                <label for="autoReplyEnabled">Activar auto-respuesta</label>
+                <input id="autoReplyEnabled" type="checkbox" formControlName="enabled" />
+              </div>
+              
+              <div class="form-group" *ngIf="settingsForm.get('autoReply.enabled')?.value">
+                <label for="autoReplyMessage">Mensaje de auto-respuesta *</label>
+                <textarea id="autoReplyMessage" formControlName="message" rows="3"
+                         placeholder="Mensaje que se enviará automáticamente a los usuarios"></textarea>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Message Settings -->
+          <div class="form-section">
+            <h3>Configuración de Mensajes</h3>
+            <div class="form-row">
+              <div class="form-group">
+                <label for="messageDelay">Retraso entre mensajes (ms) *</label>
+                <input id="messageDelay" type="number" formControlName="messageDelay" 
+                       min="0" max="60000" step="100" />
+                <div class="hint">Tiempo de espera entre mensajes consecutivos</div>
+              </div>
+              
+              <div class="form-group">
+                <label for="maxRetries">Intentos máximos de envío *</label>
+                <input id="maxRetries" type="number" formControlName="maxRetries" 
+                       min="0" max="10" />
+                <div class="hint">Número de reintentos para mensajes fallidos</div>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Webhook Configuration -->
+          <div class="form-section">
+            <h3>Configuración de Webhook</h3>
+            <div class="form-group">
+              <label for="webhookUrl">URL del Webhook</label>
+              <input id="webhookUrl" type="url" formControlName="webhookUrl" 
+                     placeholder="https://tudominio.com/webhook" />
+              <div class="hint">URL donde se enviarán las notificaciones de eventos</div>
+            </div>
+            
+            <div class="form-group">
+              <label>Eventos a notificar</label>
+              <div formArrayName="webhookEvents" class="events-list">
+                <div *ngFor="let event of webhookEvents.controls; let i = index" class="event-item">
+                  <input type="text" [formControlName]="i" 
+                         placeholder="Ej: message.received" />
+                  <button type="button" class="btn-icon btn-danger" 
+                          (click)="removeWebhookEvent(i)" title="Eliminar evento">
+                    <i class="fas fa-trash"></i>
+                  </button>
+                </div>
+                <button type="button" class="btn-secondary" (click)="addWebhookEvent()">
+                  <i class="fas fa-plus"></i> Agregar Evento
+                </button>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Form Actions -->
+          <div class="form-actions">
+            <button type="submit" class="btn-primary" [disabled]="settingsForm.invalid || isSaving">
+              <i class="fas fa-save"></i> {{ isSaving ? 'Guardando...' : 'Guardar Configuración' }}
+            </button>
+          </div>
+        </form>
+      </div>
+      
+      <!-- Conversation Flow Tab -->
+      <div *ngIf="activeTab === 'flow' && flowForm" class="tab-content">
+        <form [formGroup]="flowForm" (ngSubmit)="saveSettings()" class="flow-form">
+          <div class="form-group toggle-group">
+            <label for="flowEnabled">Activar Flujo de Conversación</label>
+            <input id="flowEnabled" type="checkbox" formControlName="enabled" />
+          </div>
+          
+          <div *ngIf="flowForm.get('enabled')?.value" class="flow-settings">
+            <div class="form-group">
+              <label for="initialMessage">Mensaje Inicial *</label>
+              <textarea id="initialMessage" formControlName="initialMessage" rows="3" 
+                       placeholder="Ej: ¡Hola! Por favor selecciona una opción:"></textarea>
+              <div class="error" *ngIf="flowForm.get('initialMessage')?.hasError('required') && flowForm.get('initialMessage')?.touched">
+                El mensaje inicial es requerido
+              </div>
+            </div>
+            
+            <div class="flow-options">
+              <div class="options-header">
+                <h4>Opciones de Respuesta</h4>
+                <button type="button" class="btn-secondary" (click)="addNewFlowOption()">
+                  <i class="fas fa-plus"></i> Agregar Opción
+                </button>
+              </div>
+              
+              <div formArrayName="options" class="options-list">
+                <div *ngFor="let option of flowOptions.controls; let i = index" 
+                     [formGroupName]="i" class="option-item">
+                  <div class="option-content">
+                    <div class="form-group">
+                      <label [for]="'optionText' + i">Texto de la opción *</label>
+                      <input [id]="'optionText' + i" type="text" formControlName="text" 
+                             placeholder="Ej: 1. Consultar precios">
+                      <div class="error" *ngIf="option.get('text')?.hasError('required') && option.get('text')?.touched">
+                        El texto de la opción es requerido
+                      </div>
+                    </div>
+                    
+                    <div class="form-group">
+                      <label [for]="'optionResponse' + i">Respuesta *</label>
+                      <textarea [id]="'optionResponse' + i" formControlName="response" rows="2"
+                               placeholder="Respuesta al seleccionar esta opción"></textarea>
+                      <div class="error" *ngIf="option.get('response')?.hasError('required') && option.get('response')?.touched">
+                        La respuesta es requerida
+                      </div>
+                    </div>
+                    
+                    <div class="form-group">
+                      <label [for]="'nextStep' + i">ID del siguiente paso (opcional)</label>
+                      <input [id]="'nextStep' + i" type="text" formControlName="nextStepId"
+                             placeholder="Dejar vacío para finalizar">
+                    </div>
+                  </div>
+                  
+                  <button type="button" class="btn-icon btn-danger remove-option" 
+                          (click)="removeFlowOption(i)" title="Eliminar opción">
+                    <i class="fas fa-trash"></i>
+                  </button>
+                </div>
+                
+                <div *ngIf="flowOptions.length === 0" class="empty-options">
+                  <p>No hay opciones configuradas. Agrega opciones para que los usuarios puedan interactuar.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <div class="form-actions">
+            <button type="submit" class="btn-primary" [disabled]="flowForm.invalid || isSaving">
+              <i class="fas fa-save"></i> {{ isSaving ? 'Guardando...' : 'Guardar Flujo' }}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Success/Error Messages -->
+<div class="message-container" *ngIf="message">
+  <div class="message" [class.success]="message.type === 'success'" [class.error]="message.type === 'error'">
+    {{ message.text }}
+    <button class="close-message" (click)="message = null">&times;</button>
+  </div>
+</div>

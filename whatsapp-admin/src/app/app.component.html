@@ -1,0 +1,24 @@
+<div class="app-container">
+  <header class="app-header">
+    <div class="header-content">
+      <h1>WhatsApp Admin</h1>
+      <nav class="main-nav">
+        <a routerLink="/dashboard" routerLinkActive="active">Dashboard</a>
+        <a routerLink="/messages" routerLinkActive="active">Mensajes</a>
+        <a routerLink="/broadcast" routerLinkActive="active">Difusión</a>
+        <a routerLink="/contacts" routerLinkActive="active">Contactos</a>
+        <a routerLink="/flows" routerLinkActive="active">Flujos</a>
+        <a routerLink="/settings" routerLinkActive="active">Configuración</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="app-content">
+    <router-outlet></router-outlet>
+  </main>
+
+  <footer class="app-footer">
+    <p>&copy; 2025 WhatsApp Admin. Todos los derechos reservados.</p>
+  </footer>
+</div>
+

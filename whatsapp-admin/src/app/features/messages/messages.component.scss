@@ -1,0 +1,332 @@
+@use 'sass:color';
+
+$primary: #1565c0;
+$bg-light: #f8f9fa;
+$error: #f44336;
+$success: #4caf50;
+$warning: #ff9800;
+$info: #2196f3;
+$border-radius: 8px;
+$transition: all 0.2s ease-in-out;
+
+.messages-container {
+  max-width: 800px;
+  margin: 2rem auto;
+  padding: 1.5rem;
+  background: #fff;
+  border-radius: $border-radius;
+  box-shadow: 0 2px 15px rgba(0, 0, 0, 0.08);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+
+  h2 {
+    font-size: 1.4rem;
+    font-weight: 600;
+    color: $primary;
+    margin-bottom: 1.5rem;
+  }
+
+  /* Info and status messages */
+  .info-message {
+    display: flex;
+    align-items: flex-start;
+    gap: 1rem;
+    padding: 1.25rem;
+    margin: 1.5rem 0;
+    border-radius: $border-radius;
+    background: color.adjust($bg-light, $lightness: 2%);
+    border-left: 4px solid $info;
+    
+    &.error {
+      border-left-color: $error;
+      background: color.adjust($error, $lightness: 45%);
+      color: color.adjust($error, $lightness: -15%);
+    }
+    
+    i {
+      font-size: 1.5rem;
+      margin-top: 0.2rem;
+    }
+    
+    .message-content {
+      flex: 1;
+      
+      p {
+        margin: 0;
+        line-height: 1.5;
+        
+        &.small {
+          font-size: 0.9em;
+          opacity: 0.9;
+          margin-top: 0.5rem;
+        }
+      }
+    }
+  }
+  
+  /* Loading state */
+  .loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+    color: #555;
+    
+    .spinner {
+      width: 2.5rem;
+      height: 2.5rem;
+      border: 3px solid rgba($primary, 0.2);
+      border-radius: 50%;
+      border-top-color: $primary;
+      animation: spin 1s ease-in-out infinite;
+      margin-bottom: 1rem;
+    }
+    
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+  }
+
+  /* Search bar */
+  .search-bar {
+    margin-bottom: 1.5rem;
+    
+    input {
+      width: 100%;
+      padding: 0.75rem 1rem;
+      border: 1px solid #ddd;
+      border-radius: $border-radius;
+      font-size: 1rem;
+      transition: $transition;
+      
+      &:focus {
+        outline: none;
+        border-color: $primary;
+        box-shadow: 0 0 0 2px rgba($primary, 0.2);
+      }
+      
+      &::placeholder {
+        color: #999;
+      }
+    }
+  }
+  
+  /* Message list */
+  .message-list {
+    list-style: none;
+    padding: 0;
+    margin: 0 0 2rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+  
+  .message-item {
+    background: white;
+    border-radius: $border-radius;
+    padding: 1.25rem 1.5rem;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.05);
+    border: 1px solid #eee;
+    transition: $transition;
+    
+    &:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+    }
+  .message-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    margin-bottom: 0.75rem;
+    
+    .to {
+      font-weight: 500;
+      color: #333;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      
+      .label {
+        color: #666;
+        font-weight: normal;
+      }
+      
+      strong {
+        color: $primary;
+        font-weight: 600;
+      }
+    }
+    
+    .status {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      font-size: 0.85rem;
+      padding: 0.25rem 0.75rem;
+      border-radius: 12px;
+      font-weight: 500;
+      background: #f0f0f0;
+      color: #666;
+      
+      &-dot {
+        display: inline-block;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: currentColor;
+      }
+      
+      &-sent { color: $info; background: rgba($info, 0.1); }
+      &-delivered, &-completed { color: $success; background: rgba($success, 0.1); }
+      &-read { color: $success; background: rgba($success, 0.1); font-weight: 600; }
+      &-failed { color: $error; background: rgba($error, 0.1); }
+      &-unknown { color: #888; background: #f5f5f5; }
+    }
+    
+    .date {
+      color: #888;
+      font-size: 0.85rem;
+      white-space: nowrap;
+    }
+  }
+  .message-body {
+    margin: 0.5rem 0 1rem;
+    
+    .text {
+      font-size: 1.05rem;
+      line-height: 1.6;
+      color: #333;
+      margin: 0;
+      word-break: break-word;
+    }
+    
+    .empty-message {
+      color: #999;
+      font-style: italic;
+      margin: 0.5rem 0 0;
+    }
+  }
+  
+  .media-attachment {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-top: 0.75rem;
+    padding-top: 0.75rem;
+    border-top: 1px dashed #e0e0e0;
+    
+    a {
+      color: $primary;
+      text-decoration: none;
+      font-size: 0.9rem;
+      transition: $transition;
+      
+      &:hover {
+        text-decoration: underline;
+        color: color.adjust($primary, $lightness: -10%);
+      }
+    }
+    
+    i {
+      color: #888;
+      font-size: 1.1rem;
+    }
+  }
+}
+
+  /* Pagination */
+  .pagination {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 1rem;
+    margin-top: 2rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid #eee;
+    
+    .pagination-button {
+      padding: 0.5rem 1.25rem;
+      background: #f5f5f5;
+      border: 1px solid #ddd;
+      border-radius: $border-radius;
+      color: #555;
+      font-size: 0.95rem;
+      cursor: pointer;
+      transition: $transition;
+      
+      &:hover:not(:disabled) {
+        background: #eee;
+        border-color: #ccc;
+      }
+      
+      &:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+      }
+    }
+    
+    .page-info {
+      font-size: 0.95rem;
+      color: #666;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.25rem;
+      
+      .total-items {
+        font-size: 0.85em;
+        color: #999;
+      }
+    }
+  }
+
+  /* Responsive styles */
+  @media (max-width: 768px) {
+    padding: 1rem;
+    
+    h2 {
+      font-size: 1.3rem;
+      margin-bottom: 1.25rem;
+    }
+    
+    .message-item {
+      padding: 1rem;
+    }
+    
+    .message-header {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 0.5rem;
+      
+      .status {
+        margin-left: auto;
+      }
+    }
+    
+    .pagination {
+      flex-direction: column;
+      gap: 0.75rem;
+      
+      .page-info {
+        order: -1;
+        margin-bottom: 0.5rem;
+      }
+    }
+  }
+  
+  @media (max-width: 480px) {
+    padding: 0.75rem;
+    
+    .info-message {
+      flex-direction: column;
+      text-align: center;
+      align-items: center;
+      
+      i {
+        margin-bottom: 0.5rem;
+      }
+    }
+  }
+}

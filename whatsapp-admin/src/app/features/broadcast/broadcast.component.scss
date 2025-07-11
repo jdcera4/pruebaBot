@@ -1,0 +1,145 @@
+// CSS puro para la vista de broadcast
+.broadcast-container {
+  max-width: 800px;
+  margin: 2rem auto;
+  padding: 0 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+.broadcast-card, .broadcast-list-card {
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+  padding: 2rem 2rem 1.5rem 2rem;
+  margin-bottom: 1.5rem;
+}
+
+.broadcast-card header {
+  margin-bottom: 1rem;
+}
+.broadcast-card h2 {
+  margin: 0 0 0.25rem 0;
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #1565c0;
+}
+.broadcast-card .subtitle {
+  color: #666;
+  font-size: 1rem;
+  margin: 0;
+}
+
+.broadcast-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.form-group label {
+  font-weight: 500;
+  margin-bottom: 0.2rem;
+}
+.form-group input,
+.form-group textarea {
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+  border: 1px solid #cfd8dc;
+  font-size: 1rem;
+  outline: none;
+  transition: border 0.2s;
+}
+.form-group input:focus,
+.form-group textarea:focus {
+  border: 1.5px solid #1565c0;
+}
+.form-group .hint {
+  font-size: 0.9rem;
+  color: #888;
+}
+.error {
+  color: #e53935;
+  font-size: 0.92rem;
+}
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+.btn-primary {
+  background: #1565c0;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 0.7rem 2rem;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.btn-primary:disabled {
+  background: #b0bec5;
+  cursor: not-allowed;
+}
+
+.broadcast-list-card header {
+  margin-bottom: 1rem;
+}
+.broadcast-list-card h3 {
+  margin: 0;
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: #1565c0;
+}
+.broadcast-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+.broadcast-info {
+  background: #f7fafd;
+  border-radius: 8px;
+  padding: 1rem 1.2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+.broadcast-title {
+  font-weight: 600;
+  color: #1565c0;
+  font-size: 1.1rem;
+}
+.broadcast-message {
+  color: #333;
+  margin-bottom: 0.2rem;
+}
+.broadcast-meta {
+  font-size: 0.95rem;
+  color: #757575;
+}
+.empty-message {
+  text-align: center;
+  color: #999;
+  padding: 1.5rem 0;
+}
+
+@media (max-width: 600px) {
+  .broadcast-container {
+    margin: 1rem 0;
+    padding: 0 0.5rem;
+    gap: 1rem;
+  }
+  .broadcast-card, .broadcast-list-card {
+    padding: 1rem;
+  }
+  .broadcast-info {
+    padding: 0.7rem 0.7rem;
+  }
+}

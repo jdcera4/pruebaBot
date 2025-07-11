@@ -1,0 +1,148 @@
+<section class="broadcast-card">
+  <header>
+    <h2>Crear Difusión</h2>
+    <p class="subtitle">Envía un mensaje masivo a contactos importados por Excel</p>
+  </header>
+  <form [formGroup]="broadcastForm" (ngSubmit)="onSubmit()" class="broadcast-form" autocomplete="off">
+    <div class="form-group">
+      <label for="excelFile">Archivo Excel de contactos</label>
+      <input 
+        id="excelFile" 
+        type="file" 
+        accept=".xlsx, .xls, .csv" 
+        (change)="onExcelFileChange($event)" 
+      />
+      <small class="hint">El archivo debe tener columnas <b>nombre</b> y <b>número</b> (o <b>name</b> y <b>number</b>).</small>
+      <div *ngIf="excelFileName" class="file-info">Archivo seleccionado: {{ excelFileName }}</div>
+      <div class="error" *ngIf="excelContacts.length === 0 && excelFileName">No se encontraron contactos válidos en el archivo.</div>
+    </div>
+
+    <div class="form-group" *ngIf="excelContacts.length > 0">
+      <label>Contactos importados ({{ excelContacts.length }})</label>
+      <ul class="imported-list">
+        <li *ngFor="let c of excelContacts">{{ c.name }} - {{ c.number }}</li>
+      </ul>
+    </div>
+
+    <div class="form-group">
+      <label for="message">Mensaje</label>
+      <textarea 
+        id="message" 
+        rows="3" 
+        formControlName="message" 
+        placeholder="Escribe el mensaje a enviar. Usa {nombre} para personalizar con el nombre del contacto."
+      ></textarea>
+      <div 
+        class="error" 
+        *ngIf="broadcastForm.get('message')?.hasError('required') && broadcastForm.get('message')?.touched"
+      >
+        El mensaje es requerido
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label for="mediaFile">Archivo multimedia (opcional)</label>
+      <input 
+        id="mediaFile" 
+        type="file" 
+        accept="image/*,video/*" 
+        (change)="onMediaFileChange($event)"
+      />
+      <small class="hint">Puedes adjuntar una imagen o video (máx. 10MB)</small>
+      <div *ngIf="mediaFileName" class="file-info">
+        Archivo seleccionado: {{ mediaFileName }}
+        <button type="button" class="remove-file-btn" (click)="removeMediaFile()">×</button>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label class="checkbox-label">
+        <input type="checkbox" formControlName="schedule" id="schedule">
+        Programar envío
+      </label>
+      
+      <div *ngIf="broadcastForm.get('schedule')?.value" class="schedule-fields">
+        <div class="form-row">
+          <div class="form-group">
+            <label for="scheduleDate">Fecha</label>
+            <input 
+              type="date" 
+              id="scheduleDate" 
+              formControlName="scheduleDate"
+              [min]="today | date: 'yyyy-MM-dd'"
+            >
+          </div>
+          <div class="form-group">
+            <label for="scheduleTime">Hora</label>
+            <input 
+              type="time" 
+              id="scheduleTime" 
+              formControlName="scheduleTime"
+            >
+          </div>
+        </div>
+      </div>
+    </div>
+
+
+
+    <div class="form-actions">
+      <button 
+        type="submit" 
+        [disabled]="isSending || broadcastForm.invalid || excelContacts.length === 0"
+        class="primary-btn"
+      >
+        <span *ngIf="isSending" class="loading-spinner"></span>
+        {{ isSending ? 'Enviando...' : 'Enviar Mensaje' }}
+      </button>
+    </div>
+
+    <!-- Results Section -->
+    <div *ngIf="showResults && broadcastResult" class="results-section">
+      <h3>{{ broadcastResult?.success ? '✓ Envío completado' : '✗ Error en el envío' }}</h3>
+      <p [class.success]="broadcastResult?.success" [class.error]="!broadcastResult?.success">
+        {{ broadcastResult?.message }}
+      </p>
+      
+      <div *ngIf="broadcastResult.results && broadcastResult.results.length > 0" class="results-details">
+        <div class="result-summary">
+          <div class="summary-item">
+            <span class="count total">{{ broadcastResult.total }}</span>
+            <span class="label">Total</span>
+          </div>
+          <div class="summary-item">
+            <span class="count success">{{ broadcastResult.sent }}</span>
+            <span class="label">Enviados</span>
+          </div>
+          <div class="summary-item">
+            <span class="count failed">{{ broadcastResult.failed }}</span>
+            <span class="label">Fallidos</span>
+          </div>
+        </div>
+        
+        <div class="result-list">
+          <div *ngFor="let result of broadcastResult.results" class="result-item" [class.failed]="result.status === 'failed'">
+            <span class="status-icon">{{ result.status === 'sent' ? '✓' : '✗' }}</span>
+            <div class="contact-info">
+              <span class="name">{{ result.name || 'Sin nombre' }}</span>
+              <span class="phone">{{ result.phone }}</span>
+            </div>
+            <span *ngIf="result.error" class="error-message">{{ result.error }}</span>
+          </div>
+        </div>
+      </div>
+      
+      <div class="result-actions">
+        <button type="button" class="secondary-btn" (click)="showResults = false">Cerrar</button>
+        <button 
+          *ngIf="broadcastResult.failed && broadcastResult.failed > 0" 
+          type="button" 
+          class="primary-btn"
+          (click)="retryFailed()"
+        >
+          Reintentar fallidos
+        </button>
+      </div>
+    </div>
+  </form>
+</section>

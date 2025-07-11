@@ -1,0 +1,116 @@
+<div class="file-upload-container" 
+     [class.dragover]="isDragging"
+     (dragover)="onDragOver($event)"
+     (dragleave)="onDragLeave($event)"
+     (drop)="onDrop($event)">
+  
+  <!-- File Input (hidden) -->
+  <input 
+    type="file" 
+    [id]="'fileInput' + _uid"
+    [accept]="accept" 
+    [multiple]="multiple" 
+    (change)="onFileSelected($event)"
+    class="file-input"
+    #fileInput>
+  
+  <!-- Upload Area -->
+  <div class="upload-area" (click)="fileInput.click()">
+    <div class="upload-icon">
+      <mat-icon>cloud_upload</mat-icon>
+    </div>
+    <div class="upload-text">
+      @if (!isDragging) {
+        <span class="drag-text">
+          {{ label }}
+        </span>
+      }
+      @if (isDragging) {
+        <span class="drag-text">
+          Suelta los archivos aquí
+        </span>
+      }
+      <span class="hint-text">o arrastra y suelta archivos aquí</span>
+      @if (accept) {
+        <span class="hint-text">Formatos aceptados: {{ accept }}</span>
+      }
+      <span class="hint-text">Tamaño máximo: {{ maxSizeMB }}MB por archivo</span>
+    </div>
+  </div>
+  
+  <!-- Error Message -->
+  @if (error) {
+    <div class="error-message">
+      <mat-icon>error_outline</mat-icon>
+      <span>{{ error }}</span>
+    </div>
+  }
+  
+  <!-- File Previews -->
+  @if (preview && previews.length > 0) {
+    <div class="file-previews">
+      @for (item of previews; track $index) {
+        <div class="preview-item" [class]="item.type">
+          <div class="preview-content">
+            @if (item.type === 'image') {
+              <div class="image-preview">
+                <img [src]="item.dataUrl" [alt]="item.name">
+              </div>
+            }
+            
+            @if (item.type === 'video') {
+              <div class="video-preview">
+                <video controls>
+                  <source [src]="item.dataUrl" [type]="item.file.type">
+                </video>
+              </div>
+            }
+            
+            @if (item.type === 'document') {
+              <div class="document-preview">
+                <div class="file-icon">
+                  @if (item.file.type.includes('pdf')) {
+                    <mat-icon>picture_as_pdf</mat-icon>
+                  } @else if (item.file.type.includes('word')) {
+                    <mat-icon>description</mat-icon>
+                  } @else if (item.file.type.includes('excel')) {
+                    <mat-icon>table_chart</mat-icon>
+                  } @else if (item.file.type.includes('powerpoint')) {
+                    <mat-icon>slideshow</mat-icon>
+                  } @else {
+                    <mat-icon>insert_drive_file</mat-icon>
+                  }
+                </div>
+                <div class="file-info">
+                  <div class="file-name" [title]="item.name">{{ item.name }}</div>
+                  <div class="file-size">{{ item.size }}</div>
+                </div>
+              </div>
+            }
+            
+            <!-- Remove Button -->
+            <button mat-icon-button class="remove-button" (click)="removeFile($index); $event.stopPropagation()">
+              <mat-icon>close</mat-icon>
+            </button>
+          </div>
+        </div>
+      }
+    </div>
+  }
+  
+  <!-- Selected Files Summary (when preview is disabled) -->
+  @if (!preview && previews.length > 0) {
+    <div class="files-summary">
+      @for (item of previews; track $index) {
+        <div class="summary-item">
+          <mat-icon>insert_drive_file</mat-icon>
+          <span class="file-name" [title]="item.name">{{ item.name }}</span>
+          <span class="file-size">({{ item.size }})</span>
+          <button mat-icon-button (click)="removeFile($index); $event.stopPropagation()">
+            <mat-icon>close</mat-icon>
+          </button>
+        </div>
+      }
+    </div>
+  }
+</div>

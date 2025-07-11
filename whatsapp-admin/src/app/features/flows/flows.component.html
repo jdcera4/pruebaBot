@@ -1,0 +1,26 @@
+<div class="flows-container">
+  <h2>Flujos de Conversación</h2>
+  <button (click)="fetchFlows()">Actualizar</button>
+  <button (click)="onNew()" style="float:right; margin-bottom:1rem;">+ Nuevo flujo</button>
+  <div *ngIf="loading">Cargando...</div>
+  <div *ngIf="error" class="error">{{error}}</div>
+  <div *ngIf="!loading && flows.length === 0">No hay flujos configurados.</div>
+  <ul *ngIf="!loading && flows.length">
+    <li *ngFor="let flow of flows">
+      <strong>{{flow.name}}</strong>
+      <span *ngIf="flow.isActive" class="active">(Activo)</span>
+      <div>{{flow.description}}</div>
+      <div>Pasos: {{flow.steps.length}}</div>
+      <button (click)="onEdit(flow)">Editar</button>
+      <button (click)="onDelete(flow)" style="color:red;">Eliminar</button>
+    </li>
+  </ul>
+
+  <!-- Modal para crear/editar flujo -->
+  <div class="modal-overlay" *ngIf="showModal">
+    <div class="modal-window">
+      <app-flow-edit [flow]="editingFlow" (saved)="closeModal(true)" (cancel)="closeModal()"></app-flow-edit>
+      <button class="close-btn" (click)="closeModal()">Cerrar</button>
+    </div>
+  </div>
+</div>

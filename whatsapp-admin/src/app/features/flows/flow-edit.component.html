@@ -1,0 +1,41 @@
+<div class="flow-edit-container">
+  <form [formGroup]="form" (ngSubmit)="saveFlow()">
+    <div>
+      <label>Nombre del flujo:</label>
+      <input formControlName="name" required />
+    </div>
+    <div>
+      <label>Descripción:</label>
+      <input formControlName="description" />
+    </div>
+    <div>
+      <label>Activo:</label>
+      <input type="checkbox" formControlName="isActive" />
+    </div>
+    <h3>Pasos</h3>
+    <div *ngFor="let step of steps.controls; let i = index" [formGroup]="asFormGroup(step)" class="step-block">
+      <label>Mensaje:</label>
+      <input formControlName="message" required />
+      <label>¿Final?</label>
+      <input type="checkbox" formControlName="isFinal" />
+      <button type="button" (click)="removeStep(i)">Eliminar Paso</button>
+      <div>
+        <h4>Opciones</h4>
+        <div *ngFor="let opt of stepOptions(i).controls; let j = index" [formGroup]="asFormGroup(opt)" class="option-block">
+          <label>Texto opción:</label>
+          <input formControlName="label" required />
+          <label>ID Siguiente Paso:</label>
+          <input formControlName="nextStepId" />
+          <label>Mensaje respuesta:</label>
+          <input formControlName="responseMessage" />
+          <button type="button" (click)="removeOption(i, j)">Eliminar Opción</button>
+        </div>
+        <button type="button" (click)="addOption(i)">Agregar Opción</button>
+      </div>
+    </div>
+    <button type="button" (click)="addStep()">Agregar Paso</button>
+    <div *ngIf="error" class="error">{{error}}</div>
+    <button type="submit" [disabled]="loading">Guardar Flujo</button>
+    <button type="button" (click)="cancel.emit()" style="margin-left:1rem;">Cancelar</button>
+  </form>
+</div>

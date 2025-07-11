@@ -1,0 +1,6 @@
+.flow-edit-container { background: #fafbfc; padding: 1rem; border-radius: 8px; box-shadow: 0 2px 8px #eee; max-width: 700px; margin: 2rem auto; }
+.step-block, .option-block { border: 1px solid #eee; padding: 0.5rem; margin-bottom: 1rem; border-radius: 4px; background: #fff; }
+label { display: block; margin-top: 0.5rem; }
+input[type="text"], input[type="number"], input[type="checkbox"] { margin-bottom: 0.5rem; }
+button { margin-top: 0.5rem; margin-right: 0.5rem; }
+.error { color: red; margin-top: 1rem; }

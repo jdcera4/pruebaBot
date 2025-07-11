@@ -1,0 +1,28 @@
+/* --- RESET & BASE GLOBAL STYLES --- */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+html, body {
+  height: 100%;
+  font-family: 'Segoe UI', Roboto, Arial, sans-serif;
+  background: #f4f6fb;
+  color: #222;
+}
+body {
+  min-height: 100vh;
+  line-height: 1.5;
+}
+
+/* General styles */
+body {
+  margin: 0;
+  font-family: Roboto, "Helvetica Neue", sans-serif;
+}
+
+/* Responsive images */
+img {
+  max-width: 100%;
+  height: auto;
+}

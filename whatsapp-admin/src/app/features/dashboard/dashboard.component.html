@@ -1,0 +1,42 @@
+<div class="dashboard-container">
+  <h2>Dashboard</h2>
+  <div *ngIf="isLoading" class="loading">Cargando estado...</div>
+  <div *ngIf="errorMsg" class="error">{{ errorMsg }}</div>
+  <div *ngIf="status" class="stats">
+    <div class="stat-card">
+      <span class="stat-label">Estado de conexión</span>
+      <span class="stat-dot" [class.connected]="status.connected" [class.disconnected]="!status.connected"></span>
+      <span class="stat-value">{{ status.connected ? 'Conectado' : 'Desconectado' }}</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Contactos cargados</span>
+      <span class="stat-value">{{ status.contactsCount || 0 }}</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Mensajes en cola</span>
+      <span class="stat-value">{{ status.queuedMessages || 0 }}</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Uptime</span>
+      <span class="stat-value">{{ (status.uptime || 0) | number:'1.0-0' }}s</span>
+    </div>
+    <div class="stat-card" *ngIf="status.clientInfo">
+      <span class="stat-label">Cliente</span>
+      <span class="stat-value">{{ status.clientInfo?.pushname || status.clientInfo?.wid?.user || 'No disponible' }}</span>
+    </div>
+  </div>
+  <div *ngIf="status?.needsQR">
+    <div class="qr-section">
+      <span class="stat-label">Escanea este QR para conectar WhatsApp:</span>
+      <div *ngIf="qrData; else qrLoading">
+        <!-- Si el backend retorna una imagen base64, mostrarla como imagen -->
+        <img *ngIf="qrData.startsWith('data:image')" [src]="qrData" alt="QR WhatsApp" style="max-width:240px; margin:12px 0;">
+        <!-- Si es un string QR, mostrarlo como texto -->
+        <pre *ngIf="!qrData.startsWith('data:image')">{{ qrData }}</pre>
+      </div>
+      <ng-template #qrLoading>
+        <div class="loading">Cargando QR...</div>
+      </ng-template>
+    </div>
+  </div>
+</div>

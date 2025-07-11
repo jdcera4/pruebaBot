@@ -1,0 +1,92 @@
+$primary: #1565c0;
+$bg-light: #f8f9fa;
+$error: #f44336;
+$success: #43a047;
+
+.dashboard-container {
+  max-width: 700px;
+  margin: 2rem auto;
+  padding: 1rem;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.07);
+
+  h2 {
+    font-size: 1.4rem;
+    font-weight: 600;
+    color: $primary;
+    margin-bottom: 1.5rem;
+  }
+
+  .loading, .error {
+    text-align: center;
+    font-size: 1.1rem;
+    margin: 1.5rem 0;
+  }
+  .error { color: $error; }
+
+  .stats {
+    display: flex;
+    gap: 2rem;
+    justify-content: center;
+    align-items: stretch;
+    flex-wrap: wrap;
+    margin-top: 2rem;
+  }
+  .stat-card {
+    background: $bg-light;
+    border-radius: 10px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+    padding: 1.2rem 2.2rem;
+    min-width: 180px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.6rem;
+    .stat-label {
+      font-size: 1.04rem;
+      color: #555;
+    }
+    .stat-value {
+      font-size: 1.45rem;
+      font-weight: 700;
+      color: $primary;
+    }
+    &.connection {
+      flex-direction: row;
+      gap: 0.7rem;
+      .stat-dot {
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+        display: inline-block;
+        margin-right: 0.3rem;
+        background: #ccc;
+        &.connected {
+          background: $success;
+        }
+        &.disconnected {
+          background: $error;
+        }
+      }
+    }
+  }
+}
+
+@media (max-width: 600px) {
+  .dashboard-container {
+    padding: 0.5rem;
+    h2 {
+      font-size: 1.1rem;
+    }
+    .stats {
+      gap: 1rem;
+      flex-direction: column;
+      align-items: stretch;
+    }
+    .stat-card {
+      padding: 1rem 1rem;
+      min-width: 120px;
+    }
+  }
+}
