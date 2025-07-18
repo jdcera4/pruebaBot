@@ -157,15 +157,15 @@ export class WhatsappService {
   }
 
   // Connect to WhatsApp
-  connect(): Observable<{ qrCode?: string; status: string }> {
-    return this.http.post<{ qrCode?: string; status: string }>(`${this.apiUrl}/connect`, {})
+  connect(): Observable<{ qrCode?: string; status: string; success?: boolean; message?: string }> {
+    return this.http.post<{ qrCode?: string; status: string; success?: boolean; message?: string }>(`${this.apiUrl}/connect`, {})
       .pipe(
         map(response => {
-          if (response.qrCode) {
+          if (response.status === 'connecting') {
             this.updateConnectionStatus({
               status: 'connecting',
               connected: false,
-              qrCode: response.qrCode
+              qrCode: undefined
             });
           } else if (response.status === 'connected') {
             this.updateConnectionStatus({
@@ -180,21 +180,7 @@ export class WhatsappService {
       );
   }
 
-  // Disconnect from WhatsApp
-  disconnect(): Observable<{ success: boolean }> {
-    return this.http.post<{ success: boolean }>(`${this.apiUrl}/disconnect`, {})
-      .pipe(
-        map(() => {
-          this.updateConnectionStatus({
-            status: 'disconnected',
-            connected: false,
-            qrCode: undefined
-          });
-          return { success: true };
-        }),
-        catchError(this.handleError)
-      );
-  }
+
 
   // ======= Conversation Flow Methods =======
   getConversationFlows(): Observable<ConversationFlow[]> {
@@ -258,7 +244,7 @@ export class WhatsappService {
         }
       });
     }
-    
+
     return this.http.get<PaginatedResponse<Contact>>(`${this.apiUrl}/contacts`, { params: queryParams })
       .pipe(catchError(this.handleError));
   }
@@ -286,9 +272,15 @@ export class WhatsappService {
   importContacts(file: File): Observable<any> {
     const formData = new FormData();
     formData.append('file', file);
-    
+
     return this.http.post(`${this.apiUrl}/contacts/import`, formData)
       .pipe(catchError(this.handleError));
+  }
+
+  downloadTemplate(): Observable<Blob> {
+    return this.http.get(`${this.apiUrl}/download-template`, { 
+      responseType: 'blob' 
+    }).pipe(catchError(this.handleError));
   }
 
   // ======= Message Methods =======
@@ -297,7 +289,7 @@ export class WhatsappService {
     if (contactId) {
       params = params.set('contactId', contactId);
     }
-    
+
     return this.http.get<ApiResponse<Message[]>>(`${this.apiUrl}/messages`, { params })
       .pipe(
         map(response => response.data),
@@ -315,7 +307,7 @@ export class WhatsappService {
 
   sendExcelBroadcast(formData: FormData): Observable<ExcelBroadcastResponse> {
     return this.http.post<ApiResponse<ExcelBroadcastResponse>>(
-      `${environment.apiUrl}/send-excel-broadcast`, 
+      `${environment.apiUrl}/send-excel-broadcast`,
       formData
     ).pipe(
       map(response => response.data),
@@ -327,11 +319,11 @@ export class WhatsappService {
     const formData = new FormData();
     formData.append('phones', JSON.stringify(phones));
     formData.append('message', message);
-    
+
     if (file) {
       formData.append('media', file);
     }
-    
+
     return this.http.post<ApiResponse<{ success: boolean; message: string }>>(
       `${this.apiUrl}/campaigns`,
       formData
@@ -348,27 +340,57 @@ export class WhatsappService {
     campaigns: { total: number; completed: number; inProgress: number };
     unreadMessages: number;
   }> {
-    return this.http.get<ApiResponse<{
-      totalContacts: number;
-      totalMessages: number;
-      campaigns: { total: number; completed: number; inProgress: number };
-      unreadMessages: number;
-    }>>(`${this.apiUrl}/dashboard/stats`)
+    return this.http.get<{
+      success: boolean;
+      data: {
+        totalContacts: number;
+        totalMessages: number;
+        campaigns: { total: number; completed: number; inProgress: number };
+        unreadMessages: number;
+        messageTrends?: any[];
+        recentMessages?: any[];
+        deliveryRate?: number;
+      }
+    }>(`${this.apiUrl}/dashboard/stats`)
       .pipe(
-        map(response => response.data),
-        catchError(this.handleError)
+        map(response => {
+          console.log('📊 Dashboard stats response:', response);
+          return response.data;
+        }),
+        catchError((error) => {
+          console.error('❌ Error fetching dashboard stats:', error);
+          // Return default values if API fails
+          return of({
+            totalContacts: 0,
+            totalMessages: 0,
+            campaigns: { total: 0, completed: 0, inProgress: 0 },
+            unreadMessages: 0
+          });
+        })
       );
   }
 
-  getQrStatus(): Observable<{ qrCode?: string; status: string; connected?: boolean }> {
-    return this.checkConnection().pipe(
-      map(status => ({
-        qrCode: status.connected ? undefined : 'QR_CODE_NOT_NEEDED',
-        status: status.status,
-        connected: status.connected
-      })),
-      catchError(() => of({ status: 'disconnected', connected: false }))
-    );
+  getQrStatus(): Observable<{
+    needsQR: boolean; qrCode?: string; status: string; connected?: boolean
+  }> {
+    return this.http.get<{
+      success: boolean;
+      data: {
+        qrCode: string | null;
+        isClientReady: boolean;
+        clientInfo: any;
+        needsQR: boolean;
+      }
+    }>(`${this.apiUrl}/qr-status`)
+      .pipe(
+        map(response => ({
+          qrCode: response.data.qrCode || undefined,
+          status: response.data.isClientReady ? 'connected' : 'disconnected',
+          connected: response.data.isClientReady,
+          needsQR: response.data.needsQR
+        })),
+        catchError(() => of({ status: 'disconnected', connected: false, needsQR: false }))
+      );
   }
 
   // ======= Contacts Methods =======
@@ -418,14 +440,14 @@ export class WhatsappService {
   // ======= Utility Methods =======
   private handleError(error: HttpErrorResponse) {
     let errorMessage = 'An error occurred';
-    
+
     if (error.error instanceof ErrorEvent) {
       // Client-side error
       errorMessage = `Error: ${error.error.message}`;
     } else {
       // Server-side error
       errorMessage = `Error Code: ${error.status}\nMessage: ${error.message}`;
-      
+
       // Try to get error details from the response
       if (error.error && error.error.message) {
         errorMessage = error.error.message;
@@ -439,7 +461,7 @@ export class WhatsappService {
         errorMessage = 'Error interno del servidor. Por favor intente más tarde.';
       }
     }
-    
+
     console.error('Error en WhatsAppService:', error);
     return throwError(() => new Error(errorMessage));
   }

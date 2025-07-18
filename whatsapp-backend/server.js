@@ -5,6 +5,7 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const qrcode = require('qrcode-terminal');
+const QRCode = require('qrcode');
 const cors = require('cors');
 const { body, validationResult } = require('express-validator');
 const rateLimit = require('express-rate-limit');
@@ -54,16 +55,16 @@ const createMulterConfig = (destination, allowedTypes) => {
         limits: { fileSize: 16 * 1024 * 1024 },
         fileFilter: (req, file, cb) => {
             const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
-const mimetype = (
-    file.mimetype === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
-    file.mimetype === 'application/vnd.ms-excel' ||
-    file.mimetype === 'text/csv'
-);
-if (extname || mimetype) {
-    return cb(null, true);
-} else {
-    cb(new Error(`Tipo de archivo no permitido: ${file.originalname} (${file.mimetype})`));
-}
+            const mimetype = (
+                file.mimetype === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
+                file.mimetype === 'application/vnd.ms-excel' ||
+                file.mimetype === 'text/csv'
+            );
+            if (extname || mimetype) {
+                return cb(null, true);
+            } else {
+                cb(new Error(`Tipo de archivo no permitido: ${file.originalname} (${file.mimetype})`));
+            }
         }
     });
 };
@@ -74,6 +75,189 @@ const uploadMedia = createMulterConfig('./uploads/media/', /\.(jpe?g|png|gif|pdf
 
 // Servir archivos estáticos
 app.use('/uploads', express.static('uploads'));
+
+// ===== FUNCIONES AUXILIARES PARA MULTIMEDIA =====
+
+// Función para limpiar y normalizar nombres de archivo automáticamente
+function cleanFileName(originalName) {
+    if (!originalName) return 'archivo';
+
+    console.log(`🔧 Limpiando nombre: "${originalName}"`);
+
+    let cleanName = originalName
+        // Reemplazar caracteres especiales comunes de encoding UTF-8
+        .replace(/Ã³/g, 'o')
+        .replace(/Ã¡/g, 'a')
+        .replace(/Ã©/g, 'e')
+        .replace(/Ã­/g, 'i')
+        .replace(/Ãº/g, 'u')
+        .replace(/Ã±/g, 'n')
+        .replace(/Ã§/g, 'c')
+        // Reemplazar acentos normales también
+        .replace(/[áàäâ]/g, 'a')
+        .replace(/[éèëê]/g, 'e')
+        .replace(/[íìïî]/g, 'i')
+        .replace(/[óòöô]/g, 'o')
+        .replace(/[úùüû]/g, 'u')
+        .replace(/ñ/g, 'n')
+        .replace(/ç/g, 'c')
+        // Remover otros caracteres problemáticos
+        .replace(/[^\w\s.-]/g, '')
+        // Reemplazar espacios y guiones múltiples
+        .replace(/[\s-]+/g, '_')
+        // Remover guiones bajos múltiples
+        .replace(/_+/g, '_')
+        // Remover caracteres al inicio/final
+        .replace(/^[_.-]+|[_.-]+$/g, '')
+        // Convertir a minúsculas para consistencia
+        .toLowerCase();
+
+    // Si el nombre queda muy corto o vacío, usar uno genérico con timestamp
+    if (cleanName.length < 3) {
+        cleanName = `archivo_${Date.now()}`;
+    }
+
+    // Limitar longitud del nombre
+    if (cleanName.length > 40) {
+        cleanName = cleanName.substring(0, 40);
+    }
+
+    console.log(`✨ Nombre limpiado: "${originalName}" → "${cleanName}"`);
+    return cleanName;
+}
+
+// Función auxiliar para crear MessageMedia de forma segura con renombrado automático
+async function createSafeMessageMedia(filePath, originalName = '') {
+    try {
+        if (!fs.existsSync(filePath)) {
+            throw new Error('Archivo no encontrado');
+        }
+
+        const stats = fs.statSync(filePath);
+        const fileSize = stats.size;
+
+        console.log(`📎 Procesando archivo: ${originalName} (${fileSize} bytes)`);
+
+        // Límites de WhatsApp
+        const MAX_FILE_SIZE = 64 * 1024 * 1024; // 64MB
+        if (fileSize > MAX_FILE_SIZE) {
+            throw new Error(`Archivo demasiado grande: ${Math.round(fileSize / 1024 / 1024)}MB. Máximo: 64MB`);
+        }
+
+        // Limpiar automáticamente el nombre del archivo
+        const cleanedName = cleanFileName(originalName);
+
+        // Crear MessageMedia inicial
+        const media = MessageMedia.fromFilePath(filePath);
+
+        // Aplicar el nombre limpio automáticamente
+        if (media && cleanedName !== originalName) {
+            console.log(`🔄 Aplicando nombre limpio automáticamente`);
+            media.filename = cleanedName;
+        }
+
+        // Validar que se creó correctamente
+        if (!media || !media.data) {
+            throw new Error('No se pudo procesar el archivo multimedia');
+        }
+
+        // Para videos, aplicar nombre limpio y preparar alternativas
+        const mimeType = media.mimetype || '';
+        if (mimeType.startsWith('video/')) {
+            console.log(`🎥 Procesando video: ${mimeType}`);
+            
+            // Aplicar nombre limpio
+            const extension = path.extname(originalName).toLowerCase() || '.mp4';
+            media.filename = cleanedName + extension;
+            
+            // Preparar versión alternativa como documento para fallback
+            media._documentFallback = new MessageMedia(
+                'application/octet-stream',
+                media.data,
+                media.filename
+            );
+            
+            console.log(`✅ Video preparado: "${originalName}" → "${media.filename}"`);
+        }
+
+        console.log(`✅ MessageMedia creado exitosamente: ${mimeType}`);
+        return media;
+
+    } catch (error) {
+        console.error(`❌ Error creando MessageMedia:`, error.message);
+        throw error;
+    }
+}
+
+// Función auxiliar para enviar mensaje con multimedia de forma segura
+async function sendMessageWithMedia(client, phone, media, caption = '') {
+    console.log(`📤 Intentando enviar multimedia a ${phone}`);
+
+    // MÉTODO 1: Intentar envío normal como video
+    try {
+        console.log(`🎬 Método 1: Enviando como video...`);
+        const sentMessage = await client.sendMessage(phone, media, {
+            caption: caption
+        });
+        console.log(`✅ Video enviado exitosamente a ${phone}`);
+        return sentMessage;
+    } catch (error1) {
+        console.log(`❌ Método 1 falló: ${error1.message}`);
+    }
+
+    // MÉTODO 2: Intentar como documento si es video
+    if (media.mimetype && media.mimetype.startsWith('video/')) {
+        try {
+            console.log(`📄 Método 2: Enviando video como documento...`);
+            const documentMedia = new MessageMedia(
+                'application/octet-stream',
+                media.data,
+                media.filename || 'video.mp4'
+            );
+            const sentMessage = await client.sendMessage(phone, documentMedia, {
+                caption: caption
+            });
+            console.log(`✅ Video enviado como documento a ${phone}`);
+            return sentMessage;
+        } catch (error2) {
+            console.log(`❌ Método 2 falló: ${error2.message}`);
+        }
+    }
+
+    // MÉTODO 3: Recrear MessageMedia con configuración básica
+    try {
+        console.log(`🔧 Método 3: Recreando MessageMedia...`);
+        const basicMedia = new MessageMedia(
+            'video/mp4',
+            media.data,
+            'video.mp4'
+        );
+        const sentMessage = await client.sendMessage(phone, basicMedia, {
+            caption: caption
+        });
+        console.log(`✅ Video recreado enviado exitosamente a ${phone}`);
+        return sentMessage;
+    } catch (error3) {
+        console.log(`❌ Método 3 falló: ${error3.message}`);
+    }
+
+    // MÉTODO 4: Enviar solo texto si todo falla
+    if (caption) {
+        try {
+            console.log(`📝 Método 4: Enviando solo texto...`);
+            const textMessage = await client.sendMessage(phone, 
+                `${caption}\n\n📹 Nota: El video no pudo ser enviado debido a limitaciones técnicas. El archivo será enviado por separado si es posible.`
+            );
+            console.log(`✅ Texto enviado como alternativa a ${phone}`);
+            return textMessage;
+        } catch (error4) {
+            console.log(`❌ Método 4 falló: ${error4.message}`);
+            throw error4;
+        }
+    }
+
+    throw new Error('Todos los métodos de envío fallaron');
+}
 
 // --- USO DE RUTAS MODULARES ---
 app.use('/api/flows', require('./routes/flows'));
@@ -158,6 +342,129 @@ if (!fs.existsSync('./data')) {
 }
 
 // Cargar datos persistentes
+// Función para inicializar datos de ejemplo
+function initializeSampleData() {
+    // Solo agregar datos de ejemplo si no hay datos existentes
+    if (contacts.length === 0) {
+        contacts = [
+            {
+                id: 'sample-1',
+                name: 'Juan Pérez',
+                phone: '573001234567@c.us',
+                source: 'manual',
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString()
+            },
+            {
+                id: 'sample-2',
+                name: 'María García',
+                phone: '573009876543@c.us',
+                source: 'excel_import',
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString()
+            },
+            {
+                id: 'sample-3',
+                name: 'Carlos López',
+                phone: '573005555555@c.us',
+                source: 'manual',
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString()
+            }
+        ];
+        console.log('📝 Contactos de ejemplo inicializados');
+    }
+
+    if (messages.length === 0) {
+        const now = new Date();
+        const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+        const twoDaysAgo = new Date(now.getTime() - 2 * 24 * 60 * 60 * 1000);
+
+        messages = [
+            {
+                id: 'msg-1',
+                to: '573001234567@c.us',
+                toName: 'Juan Pérez',
+                message: 'Hola Juan, ¿cómo estás?',
+                status: 'sent',
+                sentAt: now.toISOString(),
+                createdAt: now.toISOString()
+            },
+            {
+                id: 'msg-2',
+                to: '573009876543@c.us',
+                toName: 'María García',
+                message: 'Buenos días María, tenemos una oferta especial para ti.',
+                status: 'delivered',
+                sentAt: yesterday.toISOString(),
+                deliveredAt: yesterday.toISOString(),
+                createdAt: yesterday.toISOString()
+            },
+            {
+                id: 'msg-3',
+                to: '573005555555@c.us',
+                toName: 'Carlos López',
+                message: 'Hola Carlos, gracias por tu interés en nuestros servicios.',
+                status: 'read',
+                sentAt: twoDaysAgo.toISOString(),
+                deliveredAt: twoDaysAgo.toISOString(),
+                readAt: twoDaysAgo.toISOString(),
+                createdAt: twoDaysAgo.toISOString()
+            },
+            {
+                id: 'msg-4',
+                to: '573001111111@c.us',
+                toName: 'Cliente Test',
+                message: 'Este mensaje falló al enviarse',
+                status: 'failed',
+                sentAt: yesterday.toISOString(),
+                error: 'Número no registrado en WhatsApp',
+                createdAt: yesterday.toISOString()
+            }
+        ];
+        console.log('💬 Mensajes de ejemplo inicializados');
+    }
+
+    if (campaigns.length === 0) {
+        campaigns = [
+            {
+                id: 'campaign-1',
+                name: 'Campaña de Bienvenida',
+                message: 'Bienvenido a nuestro servicio',
+                status: 'completed',
+                contacts: contacts.slice(0, 2),
+                createdAt: new Date().toISOString(),
+                completedAt: new Date().toISOString(),
+                progress: {
+                    total: 2,
+                    sent: 2,
+                    failed: 0,
+                    pending: 0
+                }
+            },
+            {
+                id: 'campaign-2',
+                name: 'Promoción Especial',
+                message: 'Oferta especial por tiempo limitado',
+                status: 'scheduled',
+                contacts: contacts,
+                createdAt: new Date().toISOString(),
+                scheduledFor: new Date(Date.now() + 60 * 60 * 1000).toISOString(), // 1 hora en el futuro
+                progress: {
+                    total: contacts.length,
+                    sent: 0,
+                    failed: 0,
+                    pending: contacts.length
+                }
+            }
+        ];
+        console.log('📢 Campañas de ejemplo inicializadas');
+    }
+
+    // Guardar los datos de ejemplo
+    saveData();
+}
+
 function loadData() {
     try {
         if (fs.existsSync(SETTINGS_FILE)) {
@@ -180,13 +487,14 @@ function loadData() {
             messages = [];
             saveMessages();
         }
+
+        // Inicializar datos de ejemplo si no hay datos
+        initializeSampleData();
+
     } catch (error) {
         console.error('Error al cargar datos:', error);
-        // Asegurarse de que hay mensajes de ejemplo incluso si hay un error
-        if (messages.length === 0) {
-            messages = [];
-            saveMessages();
-        }
+        // Inicializar datos de ejemplo en caso de error
+        initializeSampleData();
     }
 }
 
@@ -381,6 +689,8 @@ function saveData() {
     }
 }
 
+// Endpoint moved to better location below
+
 // Cargar datos al iniciar
 loadData();
 
@@ -508,6 +818,200 @@ function createCampaign(data) {
     return campaign;
 }
 
+// Función para crear campaña programada
+function createScheduledCampaign(data) {
+    const campaign = {
+        id: Date.now().toString(),
+        name: `Envío programado - ${new Date(data.scheduledFor).toLocaleString('es-CO', { timeZone: 'America/Bogota' })}`,
+        message: data.message,
+        mediaPath: data.mediaFile ? data.mediaFile.path : null,
+        mediaType: data.mediaFile ? data.mediaFile.mimetype : null,
+        contacts: data.contacts || [],
+        status: 'scheduled',
+        createdAt: new Date().toISOString(),
+        startedAt: null,
+        completedAt: null,
+        scheduledFor: data.scheduledFor,
+        progress: {
+            total: data.contacts?.length || 0,
+            sent: 0,
+            failed: 0,
+            pending: data.contacts?.length || 0
+        },
+        results: []
+    };
+
+    campaigns.push(campaign);
+    saveData();
+    return campaign;
+}
+
+// Mapa para almacenar timeouts de campañas programadas
+const scheduledTimeouts = new Map();
+
+// Función para programar la ejecución de una campaña
+function scheduleExecution(campaignId, scheduledDate) {
+    const now = new Date();
+    const delay = scheduledDate.getTime() - now.getTime();
+
+    if (delay <= 0) {
+        console.log('La fecha programada ya pasó, ejecutando inmediatamente');
+        executeScheduledCampaign(campaignId);
+        return;
+    }
+
+    console.log(`📅 Campaña ${campaignId} programada para ejecutarse en ${Math.round(delay / 1000 / 60)} minutos`);
+
+    const timeoutId = setTimeout(() => {
+        executeScheduledCampaign(campaignId);
+        scheduledTimeouts.delete(campaignId);
+    }, delay);
+
+    scheduledTimeouts.set(campaignId, timeoutId);
+}
+
+// Función para ejecutar campaña programada
+async function executeScheduledCampaign(campaignId) {
+    try {
+        const campaign = campaigns.find(c => c.id === campaignId);
+        if (!campaign) {
+            console.error(`Campaña ${campaignId} no encontrada`);
+            return;
+        }
+
+        if (campaign.status !== 'scheduled') {
+            console.log(`Campaña ${campaignId} ya no está programada (estado: ${campaign.status})`);
+            return;
+        }
+
+        console.log(`🚀 Ejecutando campaña programada: ${campaign.name}`);
+
+        campaign.status = 'running';
+        campaign.startedAt = new Date().toISOString();
+        saveData();
+
+        const results = [];
+        let media = null;
+
+        // Procesar archivo multimedia si existe
+        if (campaign.mediaPath && fs.existsSync(campaign.mediaPath)) {
+            try {
+                media = await createSafeMessageMedia(campaign.mediaPath, 'Archivo de campaña');
+            } catch (error) {
+                console.error('❌ Error procesando multimedia de campaña:', error);
+                media = null; // Continuar sin multimedia
+            }
+        }
+
+        // Enviar mensajes a cada contacto
+        for (const contact of campaign.contacts) {
+            try {
+                // Verificar si el número está registrado
+                const isRegistered = await client.isRegisteredUser(contact.phone);
+                if (!isRegistered) {
+                    results.push({
+                        phone: contact.phone,
+                        name: contact.name,
+                        status: 'failed',
+                        error: 'Número no registrado en WhatsApp'
+                    });
+                    campaign.progress.failed++;
+                    campaign.progress.pending--;
+                    continue;
+                }
+
+                // Enviar mensaje
+                let sentMessage;
+                if (media) {
+                    sentMessage = await client.sendMessage(contact.phone, media, {
+                        caption: campaign.message.replace('{nombre}', contact.name || 'Cliente')
+                    });
+                } else {
+                    sentMessage = await client.sendMessage(
+                        contact.phone,
+                        campaign.message.replace('{nombre}', contact.name || 'Cliente')
+                    );
+                }
+
+                results.push({
+                    phone: contact.phone,
+                    name: contact.name,
+                    status: 'sent',
+                    messageId: sentMessage.id.id,
+                    timestamp: sentMessage.timestamp
+                });
+
+                campaign.progress.sent++;
+                campaign.progress.pending--;
+
+                console.log(`✅ Mensaje programado enviado a ${contact.name} (${contact.phone})`);
+
+            } catch (error) {
+                console.error(`❌ Error enviando mensaje programado a ${contact.phone}:`, error);
+                results.push({
+                    phone: contact.phone,
+                    name: contact.name,
+                    status: 'failed',
+                    error: error.message
+                });
+
+                campaign.progress.failed++;
+                campaign.progress.pending--;
+            }
+
+            // Pausa entre mensajes
+            await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+
+        campaign.status = 'completed';
+        campaign.completedAt = new Date().toISOString();
+        campaign.results = results;
+        saveData();
+
+        // Limpiar archivo multimedia temporal si existe
+        if (campaign.mediaPath && fs.existsSync(campaign.mediaPath)) {
+            try {
+                fs.unlinkSync(campaign.mediaPath);
+            } catch (error) {
+                console.error('Error eliminando archivo temporal:', error);
+            }
+        }
+
+        console.log(`🎉 Campaña programada completada: ${campaign.name}`);
+        console.log(`📊 Enviados: ${campaign.progress.sent}, Fallidos: ${campaign.progress.failed}`);
+
+    } catch (error) {
+        console.error('Error ejecutando campaña programada:', error);
+
+        const campaign = campaigns.find(c => c.id === campaignId);
+        if (campaign) {
+            campaign.status = 'failed';
+            campaign.completedAt = new Date().toISOString();
+            saveData();
+        }
+    }
+}
+
+// Función para verificar y ejecutar campañas programadas al iniciar el servidor
+function checkScheduledCampaigns() {
+    const now = new Date();
+    const scheduledCampaigns = campaigns.filter(c => c.status === 'scheduled' && c.scheduledFor);
+
+    scheduledCampaigns.forEach(campaign => {
+        const scheduledDate = new Date(campaign.scheduledFor);
+        const delay = scheduledDate.getTime() - now.getTime();
+
+        if (delay <= 0) {
+            // Ejecutar inmediatamente si ya pasó la hora
+            console.log(`Ejecutando campaña atrasada: ${campaign.name}`);
+            executeScheduledCampaign(campaign.id);
+        } else {
+            // Programar para más tarde
+            scheduleExecution(campaign.id, scheduledDate);
+        }
+    });
+}
+
 // Función para enviar campaña
 async function executeCampaign(campaignId) {
     const campaign = campaigns.find(c => c.id === campaignId);
@@ -550,12 +1054,17 @@ async function executeCampaign(campaignId) {
                 continue;
             }
 
-            // Enviar mensaje
+            // Enviar mensaje usando función auxiliar segura
             if (campaign.mediaPath) {
-                const media = MessageMedia.fromFilePath(campaign.mediaPath);
-                await client.sendMessage(contact.phone, media, {
-                    caption: campaign.message.replace('{nombre}', contact.name)
-                });
+                try {
+                    const media = await createSafeMessageMedia(campaign.mediaPath, 'Archivo de campaña');
+                    await sendMessageWithMedia(client, contact.phone, media, campaign.message.replace('{nombre}', contact.name));
+                } catch (error) {
+                    console.error(`❌ Error con multimedia, enviando solo texto a ${contact.phone}:`, error);
+                    await client.sendMessage(contact.phone,
+                        `${campaign.message.replace('{nombre}', contact.name)}\n\n⚠️ Nota: No se pudo enviar el archivo adjunto.`
+                    );
+                }
             } else {
                 await client.sendMessage(contact.phone, campaign.message.replace('{nombre}', contact.name));
             }
@@ -650,11 +1159,11 @@ client.on('message_ack', (msg, ack) => {
         if (messageIndex !== -1) {
             messages[messageIndex].status = ack === 3 ? 'delivered' : 'sent';
             messages[messageIndex].updatedAt = new Date().toISOString();
-            
+
             if (ack === 3) { // 3 = delivered
                 messages[messageIndex].deliveredAt = new Date().toISOString();
             }
-            
+
             saveMessages();
         }
     } catch (error) {
@@ -716,10 +1225,25 @@ client.on('message', async msg => {
     }
 });
 
-client.on('qr', (qr) => {
-    qrCodeData = qr;
-    console.log('📱 Código QR generado. Escanea con tu teléfono:');
-    qrcode.generate(qr, { small: true });
+client.on('qr', async (qr) => {
+    try {
+        // Generar QR como imagen base64
+        const qrImageBase64 = await QRCode.toDataURL(qr, {
+            width: 256,
+            margin: 2,
+            color: {
+                dark: '#000000',
+                light: '#FFFFFF'
+            }
+        });
+
+        qrCodeData = qrImageBase64;
+        console.log('📱 Código QR generado. Escanea con tu teléfono:');
+        qrcode.generate(qr, { small: true });
+    } catch (error) {
+        console.error('Error generando QR como imagen:', error);
+        qrCodeData = qr; // Fallback al string original
+    }
 });
 
 client.on('authenticated', () => {
@@ -730,6 +1254,10 @@ client.on('authenticated', () => {
 client.on('ready', async () => {
     isClientReady = true;
     clientInfo = client.info;
+
+    // Verificar campañas programadas al conectar
+    console.log('🔍 Verificando campañas programadas...');
+    checkScheduledCampaigns();
     console.log('🎉 WhatsApp Bot conectado y listo');
     console.log(`📞 Conectado como: ${clientInfo.pushname} (${clientInfo.wid.user})`);
 });
@@ -764,92 +1292,28 @@ const handleValidationErrors = (req, res, next) => {
     next();
 };
 
-// Get dashboard statistics
-app.get('/api/dashboard/stats', (req, res) => {
+// Get QR code status
+app.get('/api/qr-status', (req, res) => {
     try {
-        // Calculate message statistics
-        const totalMessages = messages.length;
-        const sentMessages = messages.filter(m => m.status === 'sent').length;
-        const deliveredMessages = messages.filter(m => m.status === 'delivered').length;
-        const readMessages = messages.filter(m => m.status === 'read').length;
-        const failedMessages = messages.filter(m => m.status === 'failed').length;
-        
-        // Calculate delivery rate (excluding failed messages)
-        const successfulMessages = totalMessages - failedMessages;
-        const deliveryRate = totalMessages > 0 ? (successfulMessages / totalMessages) * 100 : 0;
-        
-        // Calculate messages by day for the last 7 days
-        const messagesByDay = {};
-        const now = new Date();
-        
-        // Initialize last 7 days
-        for (let i = 6; i >= 0; i--) {
-            const date = new Date(now);
-            date.setDate(date.getDate() - i);
-            const dateStr = date.toISOString().split('T')[0];
-            messagesByDay[dateStr] = 0;
-        }
-        
-        // Count messages by day
-        messages.forEach(message => {
-            if (message.sentAt) {
-                const messageDate = new Date(message.sentAt).toISOString().split('T')[0];
-                if (messagesByDay[messageDate] !== undefined) {
-                    messagesByDay[messageDate]++;
-                }
-            }
-        });
-        
-        // Format messages by day for the response
-        const messagesTrend = Object.entries(messagesByDay).map(([date, count]) => ({
-            date,
-            count
-        }));
-        
-        // Get active campaigns
-        const activeCampaigns = campaigns.filter(campaign => 
-            campaign.status === 'active' || campaign.status === 'paused'
-        ).length;
-        
-        // Get total contacts
-        const totalContacts = contacts.length;
-        
-        // Get recent messages (last 5)
-        const recentMessages = [...messages]
-            .sort((a, b) => new Date(b.sentAt) - new Date(a.sentAt))
-            .slice(0, 5)
-            .map(msg => ({
-                id: msg.id,
-                to: msg.toName || msg.to,
-                message: msg.message.length > 50 ? msg.message.substring(0, 47) + '...' : msg.message,
-                status: msg.status,
-                sentAt: msg.sentAt
-            }));
-        
         res.json({
             success: true,
-            stats: {
-                totalMessages,
-                sentMessages,
-                deliveredMessages,
-                readMessages,
-                failedMessages,
-                deliveryRate: Math.round(deliveryRate * 100) / 100, // Round to 2 decimal places
-                activeCampaigns,
-                totalContacts,
-                messagesTrend,
-                recentMessages
+            data: {
+                qrCode: qrCodeData,
+                isClientReady: isClientReady,
+                clientInfo: clientInfo,
+                needsQR: qrCodeData !== null
             }
         });
     } catch (error) {
-        console.error('Error getting dashboard stats:', error);
+        console.error('Error getting QR status:', error);
         res.status(500).json({
             success: false,
-            error: 'Error al obtener estadísticas del dashboard',
-            details: error.message
+            error: 'Error al obtener estado del QR'
         });
     }
 });
+
+// Dashboard stats endpoint removed (duplicate) - using the corrected version below
 
 // Get contacts with pagination and search
 app.get('/api/contacts/paginated', (req, res) => {
@@ -862,7 +1326,7 @@ app.get('/api/contacts/paginated', (req, res) => {
         // Filter contacts by search term if provided
         let filteredContacts = contacts;
         if (searchTerm) {
-            filteredContacts = contacts.filter(contact => 
+            filteredContacts = contacts.filter(contact =>
                 contact.name.toLowerCase().includes(searchTerm) ||
                 contact.phone.includes(searchTerm) ||
                 (contact.email && contact.email.toLowerCase().includes(searchTerm))
@@ -874,7 +1338,7 @@ app.get('/api/contacts/paginated', (req, res) => {
         const pages = Math.ceil(total / limitNum);
         const startIndex = (pageNum - 1) * limitNum;
         const endIndex = Math.min(startIndex + limitNum, total);
-        
+
         // Get paginated results
         const paginatedContacts = filteredContacts.slice(startIndex, endIndex);
 
@@ -903,60 +1367,60 @@ app.get('/api/contacts/paginated', (req, res) => {
 // Get messages with pagination and filtering
 app.get('/api/messages', (req, res) => {
     try {
-        const { 
-            page = 1, 
-            limit = 10, 
+        const {
+            page = 1,
+            limit = 10,
             search = '',
             status,
             startDate,
             endDate
         } = req.query;
-        
+
         const pageNum = parseInt(page);
         const limitNum = parseInt(limit);
-        
+
         // Filter messages
         let filteredMessages = [...messages];
-        
+
         // Filter by search term (searches in message content and recipient name/phone)
         if (search) {
             const searchLower = search.toLowerCase();
-            filteredMessages = filteredMessages.filter(msg => 
+            filteredMessages = filteredMessages.filter(msg =>
                 (msg.message && msg.message.toLowerCase().includes(searchLower)) ||
                 (msg.toName && msg.toName.toLowerCase().includes(searchLower)) ||
                 (msg.to && msg.to.includes(search))
             );
         }
-        
+
         // Filter by status
         if (status) {
             filteredMessages = filteredMessages.filter(msg => msg.status === status);
         }
-        
+
         // Filter by date range
         if (startDate) {
             const start = new Date(startDate);
             filteredMessages = filteredMessages.filter(msg => new Date(msg.sentAt) >= start);
         }
-        
+
         if (endDate) {
             const end = new Date(endDate);
             end.setHours(23, 59, 59, 999); // End of the day
             filteredMessages = filteredMessages.filter(msg => new Date(msg.sentAt) <= end);
         }
-        
+
         // Sort by most recent first
         filteredMessages.sort((a, b) => new Date(b.sentAt) - new Date(a.sentAt));
-        
+
         // Calculate pagination
         const total = filteredMessages.length;
         const pages = Math.ceil(total / limitNum);
         const startIndex = (pageNum - 1) * limitNum;
         const endIndex = pageNum * limitNum;
-        
+
         // Get paginated results
         const paginatedMessages = filteredMessages.slice(startIndex, endIndex);
-        
+
         res.json({
             success: true,
             data: paginatedMessages,
@@ -986,7 +1450,7 @@ app.post('/api/messages', [
 ], checkClientReady, async (req, res) => {
     try {
         const { to, message, mediaUrl } = req.body;
-        
+
         // In a real implementation, send the message via WhatsApp Web
         const messageId = 'msg_' + Date.now();
         const newMessage = {
@@ -1000,9 +1464,9 @@ app.post('/api/messages', [
             deliveredAt: new Date(),
             readAt: null
         };
-        
+
         // Save the message to your database here
-        
+
         res.json({
             success: true,
             data: newMessage
@@ -1023,27 +1487,27 @@ app.get('/api/contacts/paginated', (req, res) => {
         const { page = 1, limit = 10, search = '' } = req.query;
         const pageNum = parseInt(page);
         const limitNum = parseInt(limit);
-        
+
         // Filter contacts by search term if provided
         let filteredContacts = contacts;
         if (search) {
             const searchLower = search.toLowerCase();
-            filteredContacts = contacts.filter(contact => 
-                (contact.name && contact.name.toLowerCase().includes(searchLower)) || 
+            filteredContacts = contacts.filter(contact =>
+                (contact.name && contact.name.toLowerCase().includes(searchLower)) ||
                 contact.phone.includes(search) ||
                 (contact.email && contact.email.toLowerCase().includes(searchLower))
             );
         }
-        
+
         // Calculate pagination
         const total = filteredContacts.length;
         const pages = Math.ceil(total / limitNum);
         const startIndex = (pageNum - 1) * limitNum;
         const endIndex = Math.min(startIndex + limitNum, total);
-        
+
         // Get paginated results
         const paginatedContacts = filteredContacts.slice(startIndex, endIndex);
-        
+
         res.json({
             success: true,
             data: {
@@ -1066,7 +1530,7 @@ app.get('/api/contacts/paginated', (req, res) => {
     }
 });
 
-// Get dashboard statistics
+// Get dashboard statistics (FIXED VERSION)
 app.get('/api/dashboard/stats', (req, res) => {
     try {
         // Calculate statistics
@@ -1076,56 +1540,65 @@ app.get('/api/dashboard/stats', (req, res) => {
         const deliveredMessages = messages.filter(m => m.status === 'delivered').length;
         const readMessages = messages.filter(m => m.status === 'read').length;
         const failedMessages = messages.filter(m => m.status === 'failed').length;
-        
+
+        // Calculate campaign statistics
         const campaignStats = campaigns.reduce((acc, campaign) => {
             if (campaign.status === 'completed') acc.completed++;
-            if (campaign.status === 'sending') acc.inProgress++;
+            if (campaign.status === 'sending' || campaign.status === 'running' || campaign.status === 'scheduled') acc.inProgress++;
             return acc;
         }, { total: campaigns.length, completed: 0, inProgress: 0 });
-        
+
+        // Calculate unread messages (messages that haven't been read)
+        const unreadMessages = messages.filter(m => m.status !== 'read').length;
+
         // Calculate message trends for the last 7 days
         const today = new Date();
         const sevenDaysAgo = new Date(today);
-        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6); // Get last 7 days including today
-        
+        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
+
         const messageTrends = [];
         for (let i = 0; i < 7; i++) {
             const date = new Date(sevenDaysAgo);
             date.setDate(date.getDate() + i);
             const dateStr = date.toISOString().split('T')[0];
-            
+
             const dayMessages = messages.filter(msg => {
                 const msgDate = new Date(msg.sentAt || msg.createdAt);
                 return msgDate.toISOString().split('T')[0] === dateStr;
             });
-            
+
             messageTrends.push({
                 date: dateStr,
                 count: dayMessages.length
             });
         }
-        
-        // Get active campaigns (not completed or failed)
-        const activeCampaigns = campaigns.filter(c => 
-            c.status !== 'completed' && c.status !== 'failed'
-        ).length;
-        
+
         // Get recent messages (last 5)
         const recentMessages = [...messages]
             .sort((a, b) => new Date(b.sentAt || b.createdAt) - new Date(a.sentAt || a.createdAt))
             .slice(0, 5);
-        
+
         // Calculate delivery rate
         const deliveredOrRead = messages.filter(m => m.status === 'delivered' || m.status === 'read').length;
         const deliveryRate = totalMessages > 0 ? Math.round((deliveredOrRead / totalMessages) * 100) : 0;
-        
+
+        console.log('📊 Dashboard Stats:', {
+            totalContacts,
+            totalMessages,
+            campaigns: campaignStats,
+            unreadMessages
+        });
+
         res.json({
             success: true,
             data: {
                 totalContacts,
                 totalMessages,
                 campaigns: campaignStats,
-                unreadMessages
+                unreadMessages,
+                messageTrends,
+                recentMessages,
+                deliveryRate
             }
         });
     } catch (error) {
@@ -1138,12 +1611,78 @@ app.get('/api/dashboard/stats', (req, res) => {
     }
 });
 
+// Endpoint para descargar plantilla de Excel
+app.get('/api/download-template', (req, res) => {
+    try {
+        console.log('📥 [DOWNLOAD-TEMPLATE] Iniciando generación de plantilla de Excel...');
+        console.log('📥 [DOWNLOAD-TEMPLATE] Request headers:', req.headers);
+        console.log('📥 [DOWNLOAD-TEMPLATE] Request method:', req.method);
+        console.log('📥 [DOWNLOAD-TEMPLATE] Request URL:', req.url);
+        
+        // Verificar que XLSX esté disponible
+        if (!XLSX) {
+            throw new Error('XLSX library not available');
+        }
+
+        // Crear datos de ejemplo para la plantilla
+        const templateData = [
+            {
+                name: 'David',
+                number: '3022576761'
+            },
+            {
+                name: 'Mariana',
+                number: '3008517958'
+            }
+        ];
+
+        // Crear workbook y worksheet
+        const workbook = XLSX.utils.book_new();
+        const worksheet = XLSX.utils.json_to_sheet(templateData);
+
+        // Configurar anchos de columna
+        worksheet['!cols'] = [
+            { width: 20 }, // Columna nombre
+            { width: 15 }  // Columna numero
+        ];
+
+        // Agregar la hoja al workbook
+        XLSX.utils.book_append_sheet(workbook, worksheet, 'Contactos');
+
+        // Generar el archivo Excel en memoria
+        const excelBuffer = XLSX.write(workbook, { 
+            type: 'buffer', 
+            bookType: 'xlsx' 
+        });
+
+        // Configurar headers para descarga
+        const fileName = `plantilla_contactos_${new Date().toISOString().split('T')[0]}.xlsx`;
+        
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+        res.setHeader('Content-Length', excelBuffer.length);
+
+        console.log(`✅ Plantilla generada: ${fileName}`);
+        
+        // Enviar el archivo
+        res.send(excelBuffer);
+
+    } catch (error) {
+        console.error('❌ Error generando plantilla:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Error al generar la plantilla de Excel',
+            details: error.message
+        });
+    }
+});
+
 // Configuración
 app.get('/api/settings', (req, res) => {
     try {
         // Leer el archivo de configuración
         const settings = JSON.parse(fs.readFileSync('./data/settings.json', 'utf8'));
-        
+
         // Asegurarse de que conversationFlow siempre tenga una estructura válida
         if (!settings.conversationFlow) {
             settings.conversationFlow = {
@@ -1152,7 +1691,7 @@ app.get('/api/settings', (req, res) => {
                 options: []
             };
         }
-        
+
         res.json({
             success: true,
             ...settings
@@ -1213,23 +1752,23 @@ app.put('/api/settings', [
         // Load current settings
         const settings = JSON.parse(fs.readFileSync('./data/settings.json', 'utf8') || '{}');
         const updates = req.body;
-        
+
         // Merge updates with existing settings
         const updatedSettings = {
             ...settings,
             ...updates,
             // Handle nested objects
-            businessHours: updates.businessHours ? { 
-                ...(settings.businessHours || {}), 
-                ...updates.businessHours 
+            businessHours: updates.businessHours ? {
+                ...(settings.businessHours || {}),
+                ...updates.businessHours
             } : settings.businessHours,
-            autoReply: updates.autoReply ? { 
-                ...(settings.autoReply || {}), 
-                ...updates.autoReply 
+            autoReply: updates.autoReply ? {
+                ...(settings.autoReply || {}),
+                ...updates.autoReply
             } : settings.autoReply,
             // Ensure webhookEvents is an array
-            webhookEvents: Array.isArray(updates.webhookEvents) 
-                ? updates.webhookEvents.filter(Boolean) 
+            webhookEvents: Array.isArray(updates.webhookEvents)
+                ? updates.webhookEvents.filter(Boolean)
                 : (settings.webhookEvents || []),
             // Handle conversation flow
             conversationFlow: updates.conversationFlow !== undefined
@@ -1248,7 +1787,7 @@ app.put('/api/settings', [
                     }
                 : settings.conversationFlow
         };
-        
+
         // Ensure required fields have default values
         if (!updatedSettings.businessName) updatedSettings.businessName = '';
         if (!updatedSettings.businessHours) {
@@ -1270,10 +1809,10 @@ app.put('/api/settings', [
         if (updatedSettings.maxRetries === undefined) updatedSettings.maxRetries = 3;
         if (!updatedSettings.webhookUrl) updatedSettings.webhookUrl = '';
         if (!Array.isArray(updatedSettings.webhookEvents)) updatedSettings.webhookEvents = [];
-        
+
         // Save the updated settings
         fs.writeFileSync('./data/settings.json', JSON.stringify(updatedSettings, null, 2), 'utf8');
-        
+
         res.json({
             success: true,
             message: 'Configuración actualizada correctamente',
@@ -1322,7 +1861,7 @@ app.get('/api/settings', (req, res) => {
                 data: defaultSettings
             });
         }
-        
+
         const settings = JSON.parse(fs.readFileSync('./data/settings.json', 'utf8'));
         res.json({
             success: true,
@@ -1382,6 +1921,8 @@ app.get('/api/status', (req, res) => {
         uptime: process.uptime()
     });
 });
+
+
 
 // Código QR
 app.get('/api/qr', (req, res) => {
@@ -1656,9 +2197,21 @@ app.post('/api/broadcast', uploadMedia.single('media'), async (req, res) => {
         const results = [];
         let media = null;
 
-        // Procesar archivo multimedia si existe
+        // Procesar archivo multimedia si existe usando función auxiliar segura
         if (req.file) {
-            media = MessageMedia.fromFilePath(req.file.path);
+            try {
+                media = await createSafeMessageMedia(req.file.path, req.file.originalname);
+            } catch (error) {
+                console.error('❌ Error procesando archivo multimedia:', error);
+                // Limpiar archivo temporal
+                if (fs.existsSync(req.file.path)) {
+                    fs.unlinkSync(req.file.path);
+                }
+                return res.status(400).json({
+                    success: false,
+                    error: `Error procesando archivo multimedia: ${error.message}`
+                });
+            }
         }
 
         for (const phoneRaw of phonesArray) {
@@ -1675,7 +2228,7 @@ app.post('/api/broadcast', uploadMedia.single('media'), async (req, res) => {
                 }
                 let sentMessage;
                 if (media) {
-                    sentMessage = await client.sendMessage(phone, media, { caption: message });
+                    sentMessage = await sendMessageWithMedia(client, phone, media, message);
                 } else {
                     sentMessage = await client.sendMessage(phone, message);
                 }
@@ -1733,13 +2286,74 @@ app.post('/api/send-excel-broadcast', uploadMedia.fields([
             });
         }
 
-        const { message } = req.body;
+        const { message, schedule } = req.body;
+
+        // Verificar si es un envío programado
+        if (schedule) {
+            try {
+                // Convertir la fecha programada a hora de Colombia
+                const scheduledDate = new Date(schedule);
+                const colombiaTime = new Date(scheduledDate.toLocaleString("en-US", { timeZone: "America/Bogota" }));
+                const now = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Bogota" }));
+
+                console.log('Fecha programada (Colombia):', colombiaTime);
+                console.log('Fecha actual (Colombia):', now);
+
+                if (colombiaTime <= now) {
+                    return res.status(400).json({
+                        success: false,
+                        error: 'La fecha programada debe ser futura (hora de Colombia)'
+                    });
+                }
+
+                // Crear campaña programada
+                const campaign = createScheduledCampaign({
+                    message,
+                    contacts,
+                    scheduledFor: scheduledDate,
+                    mediaFile: req.files.media ? req.files.media[0] : null
+                });
+
+                // Programar la ejecución
+                scheduleExecution(campaign.id, scheduledDate);
+
+                return res.json({
+                    success: true,
+                    message: `Envío programado para ${colombiaTime.toLocaleString('es-CO', { timeZone: 'America/Bogota' })} (hora de Colombia)`,
+                    campaignId: campaign.id,
+                    scheduledFor: scheduledDate,
+                    total: contacts.length
+                });
+
+            } catch (error) {
+                console.error('Error procesando programación:', error);
+                return res.status(400).json({
+                    success: false,
+                    error: 'Error al procesar la fecha de programación'
+                });
+            }
+        }
+
+        // Envío inmediato
         const results = [];
         let media = null;
 
         // Procesar archivo multimedia si existe
         if (req.files.media && req.files.media[0]) {
-            media = MessageMedia.fromFilePath(req.files.media[0].path);
+            try {
+                const mediaFile = req.files.media[0];
+                media = await createSafeMessageMedia(mediaFile.path, mediaFile.originalname);
+            } catch (error) {
+                console.error('❌ Error procesando archivo multimedia:', error);
+                // Limpiar archivo temporal si existe
+                if (req.files.media[0] && fs.existsSync(req.files.media[0].path)) {
+                    fs.unlinkSync(req.files.media[0].path);
+                }
+                return res.status(400).json({
+                    success: false,
+                    error: `Error procesando archivo multimedia: ${error.message}`
+                });
+            }
         }
 
         // Enviar mensajes a cada contacto
@@ -1769,12 +2383,15 @@ app.post('/api/send-excel-broadcast', uploadMedia.fields([
                     type: media ? 'media' : 'text'
                 };
 
-                // Enviar mensaje
+                // Enviar mensaje usando función auxiliar segura
                 let sentMessage;
                 if (media) {
-                    sentMessage = await client.sendMessage(contact.phone, media, {
-                        caption: message.replace('{nombre}', contact.name || 'Cliente')
-                    });
+                    sentMessage = await sendMessageWithMedia(
+                        client,
+                        contact.phone,
+                        media,
+                        message.replace('{nombre}', contact.name || 'Cliente')
+                    );
                 } else {
                     sentMessage = await client.sendMessage(
                         contact.phone,
@@ -1833,7 +2450,7 @@ app.post('/api/send-excel-broadcast', uploadMedia.fields([
 
     } catch (error) {
         console.error('Error en envío masivo con Excel:', error);
-        
+
         // Limpiar archivos temporales en caso de error
         if (req.files) {
             if (req.files.media && req.files.media[0] && fs.existsSync(req.files.media[0].path)) {
@@ -1843,7 +2460,7 @@ app.post('/api/send-excel-broadcast', uploadMedia.fields([
                 fs.unlinkSync(req.files.excel[0].path);
             }
         }
-        
+
         res.status(500).json({
             success: false,
             error: error.message
@@ -1859,7 +2476,7 @@ app.post('/api/broadcast', uploadMedia.single('media'), [
     try {
         const { phones, message } = req.body;
         const phonesArray = phones.split(',').map(p => p.trim());
-        
+
         if (phonesArray.length === 0) {
             return res.status(400).json({
                 success: false,
@@ -1952,11 +2569,11 @@ app.post('/api/broadcast', uploadMedia.single('media'), [
 
     } catch (error) {
         console.error('Error en difusión:', error);
-        
+
         if (req.file && fs.existsSync(req.file.path)) {
             fs.unlinkSync(req.file.path);
         }
-        
+
         res.status(500).json({
             success: false,
             error: error.message
@@ -2140,10 +2757,61 @@ app.use((err, req, res, next) => {
     });
 });
 
+// Endpoint para cancelar campaña programada
+app.delete('/api/campaigns/:id/schedule', (req, res) => {
+    try {
+        const { id } = req.params;
+        const campaign = campaigns.find(c => c.id === id);
+
+        if (!campaign) {
+            return res.status(404).json({
+                success: false,
+                error: 'Campaña no encontrada'
+            });
+        }
+
+        if (campaign.status !== 'scheduled') {
+            return res.status(400).json({
+                success: false,
+                error: 'La campaña no está programada'
+            });
+        }
+
+        // Cancelar el timeout si existe
+        if (scheduledTimeouts.has(id)) {
+            clearTimeout(scheduledTimeouts.get(id));
+            scheduledTimeouts.delete(id);
+        }
+
+        // Cambiar estado de la campaña
+        campaign.status = 'cancelled';
+        campaign.completedAt = new Date().toISOString();
+        saveData();
+
+        res.json({
+            success: true,
+            message: 'Campaña programada cancelada correctamente'
+        });
+
+    } catch (error) {
+        console.error('Error cancelando campaña programada:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Error al cancelar la campaña programada'
+        });
+    }
+});
+
 // Iniciar servidor
 const server = app.listen(PORT, HOST, () => {
     console.log(`🌐 Servidor ejecutándose en http://${HOST}:${PORT}`);
     console.log(`📚 Documentación disponible en http://${HOST}:${PORT}/api`);
+
+    // Verificar campañas programadas al iniciar el servidor (por si el cliente ya está listo)
+    if (isClientReady) {
+        console.log('🔍 Verificando campañas programadas al iniciar...');
+        checkScheduledCampaigns();
+    }
 });
 
 // Manejo de cierre limpio

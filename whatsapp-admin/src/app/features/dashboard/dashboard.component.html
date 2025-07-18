@@ -1,42 +1,103 @@
 <div class="dashboard-container">
   <h2>Dashboard</h2>
-  <div *ngIf="isLoading" class="loading">Cargando estado...</div>
+  
+  <!-- Loading State -->
+  <div *ngIf="isLoading" class="loading">
+    <div class="loading-spinner"></div>
+    <span>Cargando estado...</span>
+  </div>
+  
+  <!-- Error Message -->
   <div *ngIf="errorMsg" class="error">{{ errorMsg }}</div>
-  <div *ngIf="status" class="stats">
-    <div class="stat-card">
-      <span class="stat-label">Estado de conexión</span>
-      <span class="stat-dot" [class.connected]="status.connected" [class.disconnected]="!status.connected"></span>
-      <span class="stat-value">{{ status.connected ? 'Conectado' : 'Desconectado' }}</span>
-    </div>
-    <div class="stat-card">
-      <span class="stat-label">Contactos cargados</span>
-      <span class="stat-value">{{ status.contactsCount || 0 }}</span>
-    </div>
-    <div class="stat-card">
-      <span class="stat-label">Mensajes en cola</span>
-      <span class="stat-value">{{ status.queuedMessages || 0 }}</span>
-    </div>
-    <div class="stat-card">
-      <span class="stat-label">Uptime</span>
-      <span class="stat-value">{{ (status.uptime || 0) | number:'1.0-0' }}s</span>
-    </div>
-    <div class="stat-card" *ngIf="status.clientInfo">
-      <span class="stat-label">Cliente</span>
-      <span class="stat-value">{{ status.clientInfo?.pushname || status.clientInfo?.wid?.user || 'No disponible' }}</span>
+  
+  <!-- WhatsApp Connection Status -->
+  <div class="connection-status" [class.connected]="isConnected" [class.disconnected]="!isConnected">
+    <div class="status-indicator">
+      <span class="status-dot" [class.connected]="isConnected" [class.disconnected]="!isConnected"></span>
+      <span class="status-text">
+        {{ isConnected ? 'WhatsApp Conectado' : 'WhatsApp Desconectado' }}
+      </span>
     </div>
   </div>
-  <div *ngIf="status?.needsQR">
-    <div class="qr-section">
-      <span class="stat-label">Escanea este QR para conectar WhatsApp:</span>
-      <div *ngIf="qrData; else qrLoading">
-        <!-- Si el backend retorna una imagen base64, mostrarla como imagen -->
-        <img *ngIf="qrData.startsWith('data:image')" [src]="qrData" alt="QR WhatsApp" style="max-width:240px; margin:12px 0;">
-        <!-- Si es un string QR, mostrarlo como texto -->
-        <pre *ngIf="!qrData.startsWith('data:image')">{{ qrData }}</pre>
+
+  <!-- QR Code Section -->
+  <div *ngIf="needsQR && !isConnected" class="qr-section">
+    <div class="qr-header">
+      <h3>🔗 Conectar WhatsApp</h3>
+      <p>Escanea el código QR con tu teléfono para conectar WhatsApp Web</p>
+    </div>
+    
+    <div class="qr-container">
+      <div *ngIf="qrData; else qrLoading" class="qr-code">
+        <img [src]="qrData" alt="Código QR de WhatsApp" class="qr-image">
+        <div class="qr-instructions">
+          <p><strong>Instrucciones:</strong></p>
+          <ol>
+            <li>Abre WhatsApp en tu teléfono</li>
+            <li>Ve a Configuración > Dispositivos vinculados</li>
+            <li>Toca "Vincular un dispositivo"</li>
+            <li>Escanea este código QR</li>
+          </ol>
+        </div>
       </div>
+      
       <ng-template #qrLoading>
-        <div class="loading">Cargando QR...</div>
+        <div class="qr-loading">
+          <div class="loading-spinner"></div>
+          <span>Generando código QR...</span>
+        </div>
       </ng-template>
     </div>
+    
+    <div class="qr-actions">
+      <button class="btn-sectorial-green" (click)="refreshQr()">
+        🔄 Actualizar QR
+      </button>
+    </div>
+  </div>
+
+  <!-- Dashboard Stats -->
+  <div *ngIf="status && isConnected" class="stats-grid">
+    <div class="stat-card">
+      <div class="stat-icon">👥</div>
+      <div class="stat-content">
+        <span class="stat-label">Total Contactos</span>
+        <span class="stat-value">{{ status.totalContacts || 0 }}</span>
+      </div>
+    </div>
+    
+    <div class="stat-card">
+      <div class="stat-icon">💬</div>
+      <div class="stat-content">
+        <span class="stat-label">Total Mensajes</span>
+        <span class="stat-value">{{ status.totalMessages || 0 }}</span>
+      </div>
+    </div>
+    
+    <div class="stat-card">
+      <div class="stat-icon">📢</div>
+      <div class="stat-content">
+        <span class="stat-label">Campañas Activas</span>
+        <span class="stat-value">{{ status.campaigns?.inProgress || 0 }}</span>
+      </div>
+    </div>
+    
+    <div class="stat-card">
+      <div class="stat-icon">📬</div>
+      <div class="stat-content">
+        <span class="stat-label">Mensajes No Leídos</span>
+        <span class="stat-value">{{ status.unreadMessages || 0 }}</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Disconnected State Message -->
+  <div *ngIf="!isConnected && !needsQR" class="disconnected-message">
+    <div class="message-icon">📱</div>
+    <h3>WhatsApp no está conectado</h3>
+    <p>Esperando conexión con WhatsApp Web...</p>
+    <button class="btn-sectorial-green" (click)="refreshQr()">
+      🔄 Verificar Estado
+    </button>
   </div>
 </div>

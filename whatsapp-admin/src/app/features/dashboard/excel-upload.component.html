@@ -1,0 +1,12 @@
+<div>
+  <input type="file" (change)="onFileChange($event)" accept=".xlsx, .xls" />
+</div>
+
+<div *ngFor="let origen of origenesUnicos">
+  <h3>{{ origen }}</h3>
+  <label>Mensaje para este origen:</label>
+  <input type="text" [(ngModel)]="mensajesPorOrigen[origen]" />
+  <div *ngFor="let contacto of contactosPorOrigen[origen]">
+    <span>{{ contacto.nombre }} - {{ contacto.celular }}</span>
+  </div>
+</div>

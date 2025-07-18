@@ -1,0 +1,6 @@
+input[type='file'] { margin-bottom: 16px; }
+h3 { margin-top: 24px; color: #1976d2; }
+label { font-weight: bold; }
+input[type='text'] { margin: 8px 0 16px 0; display: block; width: 100%; max-width: 400px; }
+div[ngfor] { margin-bottom: 16px; }
+span { display: inline-block; margin-right: 8px; }

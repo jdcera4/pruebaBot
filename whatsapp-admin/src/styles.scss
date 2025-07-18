@@ -1,22 +1,36 @@
+/* --- SECTORIAL COLOR SCHEME --- */
+:root {
+  --sectorial-primary: #2c3e50;     /* Dark blue-gray */
+  --sectorial-secondary: #34495e;   /* Medium blue-gray */
+  --sectorial-accent: #27ae60;      /* Green accent */
+  --sectorial-accent-hover: #229954; /* Darker green */
+  --sectorial-red: #e74c3c;         /* Sectorial red */
+  --sectorial-red-hover: #c0392b;   /* Darker red */
+  --sectorial-light: #ecf0f1;       /* Light gray */
+  --sectorial-white: #ffffff;       /* Pure white */
+  --sectorial-text: #2c3e50;        /* Dark text */
+  --sectorial-text-light: #7f8c8d;  /* Light text */
+  --sectorial-border: #bdc3c7;      /* Border color */
+  --sectorial-background: #f8f9fa;  /* Background */
+}
+
 /* --- RESET & BASE GLOBAL STYLES --- */
 * {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
 }
+
 html, body {
   height: 100%;
   font-family: 'Segoe UI', Roboto, Arial, sans-serif;
-  background: #f4f6fb;
-  color: #222;
-}
-body {
-  min-height: 100vh;
-  line-height: 1.5;
+  background: var(--sectorial-background);
+  color: var(--sectorial-text);
 }
 
-/* General styles */
 body {
+  min-height: 100vh;
+  line-height: 1.6;
   margin: 0;
   font-family: Roboto, "Helvetica Neue", sans-serif;
 }
@@ -25,4 +39,100 @@ body {
 img {
   max-width: 100%;
   height: auto;
+}
+
+/* Angular Material customization for Sectorial theme */
+.mat-mdc-button.mat-primary {
+  --mdc-filled-button-container-color: var(--sectorial-accent);
+  --mdc-filled-button-label-text-color: var(--sectorial-white);
+}
+
+.mat-mdc-button.mat-primary:hover {
+  --mdc-filled-button-container-color: var(--sectorial-accent-hover);
+}
+
+.mat-mdc-card {
+  --mdc-elevated-card-container-color: var(--sectorial-white);
+  border: 1px solid var(--sectorial-border);
+  box-shadow: 0 2px 8px rgba(44, 62, 80, 0.1);
+}
+
+.mat-mdc-form-field {
+  --mdc-filled-text-field-focus-active-indicator-color: var(--sectorial-accent);
+  --mdc-filled-text-field-focus-label-text-color: var(--sectorial-accent);
+}
+
+/* Sectorial Button Variations */
+.btn-sectorial {
+  border: none;
+  padding: 0.8rem 1.5rem;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  font-size: 1rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  text-decoration: none;
+  
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none !important;
+  }
+  
+  &:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  }
+}
+
+.btn-sectorial-green {
+  @extend .btn-sectorial;
+  background: var(--sectorial-accent);
+  color: var(--sectorial-white);
+  
+  &:hover:not(:disabled) {
+    background: var(--sectorial-accent-hover);
+    box-shadow: 0 4px 12px rgba(39, 174, 96, 0.3);
+  }
+}
+
+.btn-sectorial-red {
+  @extend .btn-sectorial;
+  background: var(--sectorial-red);
+  color: var(--sectorial-white);
+  
+  &:hover:not(:disabled) {
+    background: var(--sectorial-red-hover);
+    box-shadow: 0 4px 12px rgba(231, 76, 60, 0.3);
+  }
+}
+
+.btn-sectorial-outline-green {
+  @extend .btn-sectorial;
+  background: transparent;
+  color: var(--sectorial-accent);
+  border: 2px solid var(--sectorial-accent);
+  
+  &:hover:not(:disabled) {
+    background: var(--sectorial-accent);
+    color: var(--sectorial-white);
+    box-shadow: 0 4px 12px rgba(39, 174, 96, 0.3);
+  }
+}
+
+.btn-sectorial-outline-red {
+  @extend .btn-sectorial;
+  background: transparent;
+  color: var(--sectorial-red);
+  border: 2px solid var(--sectorial-red);
+  
+  &:hover:not(:disabled) {
+    background: var(--sectorial-red);
+    color: var(--sectorial-white);
+    box-shadow: 0 4px 12px rgba(231, 76, 60, 0.3);
+  }
 }

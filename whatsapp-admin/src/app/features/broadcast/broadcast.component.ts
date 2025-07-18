@@ -519,6 +519,246 @@ if (excelInput) {
   }
 
   /**
+   * Inserta una variable en el textarea del mensaje
+   * @param variable Variable a insertar (ej: {nombre})
+   */
+  insertVariable(variable: string): void {
+    const messageControl = this.broadcastForm.get('message');
+    if (!messageControl) return;
+
+    const currentValue = messageControl.value || '';
+    const newValue = currentValue + variable;
+    messageControl.setValue(newValue);
+    
+    // Enfocar el textarea después de insertar
+    setTimeout(() => {
+      const textarea = document.getElementById('message') as HTMLTextAreaElement;
+      if (textarea) {
+        textarea.focus();
+        textarea.setSelectionRange(newValue.length, newValue.length);
+      }
+    }, 100);
+  }
+
+  /**
+   * Obtiene una vista previa del mensaje con el primer contacto
+   * @returns Mensaje con variables reemplazadas
+   */
+  getMessagePreview(): string {
+    const message = this.broadcastForm.get('message')?.value || '';
+    if (!message || this.excelContacts.length === 0) return '';
+
+    const firstContact = this.excelContacts[0];
+    return message.replace(/{nombre}/g, firstContact.name);
+  }
+
+  /**
+   * Obtiene la hora actual de Colombia
+   * @returns Hora actual formateada en zona horaria de Colombia
+   */
+  getCurrentColombiaTime(): string {
+    try {
+      const now = new Date();
+      return now.toLocaleString('es-CO', {
+        timeZone: 'America/Bogota',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit'
+      });
+    } catch (error) {
+      console.error('Error obteniendo hora de Colombia:', error);
+      return new Date().toLocaleString();
+    }
+  }
+
+  /**
+   * Obtiene una vista previa de cuándo se enviará el mensaje programado
+   * @returns Fecha y hora formateada para mostrar al usuario
+   */
+  getSchedulePreview(): string {
+    const scheduleDate = this.broadcastForm.get('scheduleDate')?.value;
+    const scheduleTime = this.broadcastForm.get('scheduleTime')?.value;
+    
+    if (!scheduleDate || !scheduleTime) return '';
+    
+    try {
+      const scheduledDateTime = new Date(`${scheduleDate}T${scheduleTime}`);
+      
+      // Verificar si la fecha es válida
+      if (isNaN(scheduledDateTime.getTime())) return '';
+      
+      // Formatear para mostrar en hora de Colombia
+      return scheduledDateTime.toLocaleString('es-CO', {
+        timeZone: 'America/Bogota',
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    } catch (error) {
+      console.error('Error formateando vista previa de programación:', error);
+      return '';
+    }
+  }
+
+  /**
+   * Obtiene el texto del botón de envío según el estado actual
+   * @returns Texto apropiado para el botón de envío
+   */
+  getSubmitButtonText(): string {
+    if (this.isSending) {
+      return this.broadcastForm.get('schedule')?.value 
+        ? 'Programando envío...' 
+        : 'Enviando mensajes...';
+    }
+    
+    return this.broadcastForm.get('schedule')?.value 
+      ? 'Programar Envío' 
+      : 'Enviar Difusión';
+  }
+
+  /**
+   * Obtiene el icono apropiado para el resultado
+   * @returns Icono según el tipo de resultado
+   */
+  getResultIcon(): string {
+    if (!this.broadcastResult) return '❓';
+    
+    if (this.broadcastResult.success) {
+      return this.isScheduledSend() ? '📅' : '✅';
+    }
+    
+    return '❌';
+  }
+
+  /**
+   * Obtiene el título apropiado para el resultado
+   * @returns Título según el tipo de resultado
+   */
+  getResultTitle(): string {
+    if (!this.broadcastResult) return 'Resultado';
+    
+    if (this.broadcastResult.success) {
+      return this.isScheduledSend() ? 'Envío Programado Exitosamente' : 'Envío Completado';
+    }
+    
+    return 'Error en el Envío';
+  }
+
+  /**
+   * Verifica si el envío actual es programado
+   * @returns true si es un envío programado
+   */
+  isScheduledSend(): boolean {
+    return this.broadcastForm.get('schedule')?.value === true;
+  }
+
+  /**
+   * Obtiene la fecha y hora programada formateada
+   * @returns Fecha y hora programada en formato legible
+   */
+  getScheduledTimeFormatted(): string {
+    const scheduleDate = this.broadcastForm.get('scheduleDate')?.value;
+    const scheduleTime = this.broadcastForm.get('scheduleTime')?.value;
+    
+    if (!scheduleDate || !scheduleTime) return '';
+    
+    try {
+      const scheduledDateTime = new Date(`${scheduleDate}T${scheduleTime}`);
+      
+      if (isNaN(scheduledDateTime.getTime())) return '';
+      
+      return scheduledDateTime.toLocaleString('es-CO', {
+        timeZone: 'America/Bogota',
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    } catch (error) {
+      console.error('Error formateando fecha programada:', error);
+      return '';
+    }
+  }
+
+  /**
+   * Crea una nueva difusión limpiando el formulario
+   */
+  createNewBroadcast(): void {
+    // Cerrar el modal de resultados
+    this.showResults = false;
+    this.broadcastResult = null;
+    
+    // Resetear el formulario manteniendo algunos valores por conveniencia
+    const currentSchedule = this.broadcastForm.get('schedule')?.value;
+    const currentScheduleDate = this.broadcastForm.get('scheduleDate')?.value;
+    const currentScheduleTime = this.broadcastForm.get('scheduleTime')?.value;
+    
+    // Limpiar formulario
+    this.resetForm();
+    
+    // Mantener configuración de programación si estaba activada
+    if (currentSchedule) {
+      this.broadcastForm.patchValue({
+        schedule: true,
+        scheduleDate: currentScheduleDate,
+        scheduleTime: currentScheduleTime
+      });
+    }
+    
+    // Scroll hacia arriba para mejor UX
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    
+    // Enfocar el campo de archivo Excel
+    setTimeout(() => {
+      const excelInput = document.getElementById('excelFile');
+      if (excelInput) {
+        excelInput.focus();
+      }
+    }, 500);
+  }
+
+  /**
+   * Descarga la plantilla de Excel con el formato correcto
+   */
+  downloadTemplate(): void {
+    console.log('📥 Descargando plantilla de Excel...');
+    
+    this.whatsappService.downloadTemplate().subscribe({
+      next: (blob: Blob) => {
+        // Crear URL del blob
+        const url = window.URL.createObjectURL(blob);
+        
+        // Crear elemento de descarga
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `plantilla_contactos_${new Date().toISOString().split('T')[0]}.xlsx`;
+        
+        // Agregar al DOM, hacer clic y remover
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        // Limpiar URL del blob
+        window.URL.revokeObjectURL(url);
+        
+        console.log('✅ Plantilla descargada exitosamente');
+      },
+      error: (error) => {
+        console.error('❌ Error descargando plantilla:', error);
+        alert('Error al descargar la plantilla. Por favor, inténtelo de nuevo.');
+      }
+    });
+  }
+
+  /**
    * Procesa los datos extraídos del archivo Excel y valida los encabezados y contactos
    * @param jsonData Matriz de filas del Excel
    */

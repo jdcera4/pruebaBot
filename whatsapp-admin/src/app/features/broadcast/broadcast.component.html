@@ -1,148 +1,399 @@
-<section class="broadcast-card">
-  <header>
-    <h2>Crear Difusión</h2>
-    <p class="subtitle">Envía un mensaje masivo a contactos importados por Excel</p>
-  </header>
-  <form [formGroup]="broadcastForm" (ngSubmit)="onSubmit()" class="broadcast-form" autocomplete="off">
-    <div class="form-group">
-      <label for="excelFile">Archivo Excel de contactos</label>
-      <input 
-        id="excelFile" 
-        type="file" 
-        accept=".xlsx, .xls, .csv" 
-        (change)="onExcelFileChange($event)" 
-      />
-      <small class="hint">El archivo debe tener columnas <b>nombre</b> y <b>número</b> (o <b>name</b> y <b>number</b>).</small>
-      <div *ngIf="excelFileName" class="file-info">Archivo seleccionado: {{ excelFileName }}</div>
-      <div class="error" *ngIf="excelContacts.length === 0 && excelFileName">No se encontraron contactos válidos en el archivo.</div>
-    </div>
-
-    <div class="form-group" *ngIf="excelContacts.length > 0">
-      <label>Contactos importados ({{ excelContacts.length }})</label>
-      <ul class="imported-list">
-        <li *ngFor="let c of excelContacts">{{ c.name }} - {{ c.number }}</li>
-      </ul>
-    </div>
-
-    <div class="form-group">
-      <label for="message">Mensaje</label>
-      <textarea 
-        id="message" 
-        rows="3" 
-        formControlName="message" 
-        placeholder="Escribe el mensaje a enviar. Usa {nombre} para personalizar con el nombre del contacto."
-      ></textarea>
-      <div 
-        class="error" 
-        *ngIf="broadcastForm.get('message')?.hasError('required') && broadcastForm.get('message')?.touched"
-      >
-        El mensaje es requerido
+<div class="broadcast-container">
+  <!-- Header Section -->
+  <div class="broadcast-header">
+    <div class="header-content">
+      <div class="header-icon">📢</div>
+      <div class="header-text">
+        <h1>Crear Difusión</h1>
+        <p>Envía mensajes masivos a tus contactos de forma rápida y eficiente</p>
       </div>
     </div>
+  </div>
 
-    <div class="form-group">
-      <label for="mediaFile">Archivo multimedia (opcional)</label>
-      <input 
-        id="mediaFile" 
-        type="file" 
-        accept="image/*,video/*" 
-        (change)="onMediaFileChange($event)"
-      />
-      <small class="hint">Puedes adjuntar una imagen o video (máx. 10MB)</small>
-      <div *ngIf="mediaFileName" class="file-info">
-        Archivo seleccionado: {{ mediaFileName }}
-        <button type="button" class="remove-file-btn" (click)="removeMediaFile()">×</button>
-      </div>
-    </div>
-
-    <div class="form-group">
-      <label class="checkbox-label">
-        <input type="checkbox" formControlName="schedule" id="schedule">
-        Programar envío
-      </label>
+  <!-- Main Form Card -->
+  <div class="broadcast-card">
+    <form [formGroup]="broadcastForm" (ngSubmit)="onSubmit()" class="broadcast-form" autocomplete="off">
       
-      <div *ngIf="broadcastForm.get('schedule')?.value" class="schedule-fields">
-        <div class="form-row">
-          <div class="form-group">
-            <label for="scheduleDate">Fecha</label>
-            <input 
-              type="date" 
-              id="scheduleDate" 
-              formControlName="scheduleDate"
-              [min]="today | date: 'yyyy-MM-dd'"
-            >
+      <!-- Step 1: Excel File Upload -->
+      <div class="form-step">
+        <div class="step-header">
+          <span class="step-number">1</span>
+          <h3>Archivo Excel de contactos</h3>
+        </div>
+        
+        <div class="file-upload-area" [class.has-file]="excelFileName" [class.drag-over]="false">
+          <input 
+            id="excelFile" 
+            type="file" 
+            accept=".xlsx,.xls,.csv" 
+            (change)="onExcelFileChange($event)"
+            class="file-input"
+          />
+          <label for="excelFile" class="file-upload-label">
+            <div class="upload-icon">📁</div>
+            <div class="upload-text">
+              <span class="upload-title">
+                {{ excelFileName || 'Seleccionar archivo Excel' }}
+              </span>
+              <span class="upload-subtitle">
+                Formatos soportados: .xlsx, .xls, .csv
+              </span>
+            </div>
+            <div class="upload-actions">
+              <button type="button" class="btn-sectorial-green upload-button">
+                {{ excelFileName ? 'Cambiar archivo' : 'Examinar' }}
+              </button>
+              <button type="button" class="btn-sectorial-outline-green template-button" (click)="downloadTemplate()">
+                📥 Descargar Plantilla
+              </button>
+            </div>
+          </label>
+        </div>
+        
+        <div class="file-requirements">
+          <div class="requirement-item">
+            <span class="requirement-icon">📋</span>
+            <span>El archivo debe tener columnas <strong>nombre</strong> y <strong>número</strong></span>
           </div>
-          <div class="form-group">
-            <label for="scheduleTime">Hora</label>
-            <input 
-              type="time" 
-              id="scheduleTime" 
-              formControlName="scheduleTime"
-            >
+          <div class="requirement-item">
+            <span class="requirement-icon">✅</span>
+            <span>También acepta <strong>name</strong> y <strong>number</strong> en inglés</span>
+          </div>
+          <div class="requirement-item template-info">
+            <span class="requirement-icon">💡</span>
+            <span>¿No tienes un archivo? <strong>Descarga la plantilla</strong> con el formato correcto y ejemplos</span>
+          </div>
+        </div>
+
+        <!-- File Status -->
+        <div *ngIf="excelFileName && excelContacts.length === 0" class="file-status error">
+          <span class="status-icon">⚠️</span>
+          <span>No se encontraron contactos válidos en el archivo</span>
+        </div>
+      </div>
+
+      <!-- Step 2: Contacts Preview -->
+      <div class="form-step" *ngIf="excelContacts.length > 0">
+        <div class="step-header">
+          <span class="step-number">2</span>
+          <h3>Contactos importados</h3>
+          <span class="contacts-count">{{ excelContacts.length }} contactos</span>
+        </div>
+        
+        <div class="contacts-preview">
+          <div class="contacts-summary">
+            <div class="summary-card">
+              <div class="summary-icon">👥</div>
+              <div class="summary-info">
+                <span class="summary-number">{{ excelContacts.length }}</span>
+                <span class="summary-label">Contactos válidos</span>
+              </div>
+            </div>
+            <div class="summary-card" *ngIf="invalidPhones.length > 0">
+              <div class="summary-icon">⚠️</div>
+              <div class="summary-info">
+                <span class="summary-number">{{ invalidPhones.length }}</span>
+                <span class="summary-label">Números inválidos</span>
+              </div>
+            </div>
+          </div>
+          
+          <div class="contacts-list-container">
+            <div class="contacts-list">
+              <div *ngFor="let contact of excelContacts.slice(0, 5); let i = index" class="contact-item">
+                <div class="contact-avatar">{{ contact.name.charAt(0).toUpperCase() }}</div>
+                <div class="contact-info">
+                  <span class="contact-name">{{ contact.name }}</span>
+                  <span class="contact-phone">{{ contact.number }}</span>
+                </div>
+              </div>
+              <div *ngIf="excelContacts.length > 5" class="more-contacts">
+                +{{ excelContacts.length - 5 }} contactos más
+              </div>
+            </div>
           </div>
         </div>
       </div>
-    </div>
 
-
-
-    <div class="form-actions">
-      <button 
-        type="submit" 
-        [disabled]="isSending || broadcastForm.invalid || excelContacts.length === 0"
-        class="primary-btn"
-      >
-        <span *ngIf="isSending" class="loading-spinner"></span>
-        {{ isSending ? 'Enviando...' : 'Enviar Mensaje' }}
-      </button>
-    </div>
-
-    <!-- Results Section -->
-    <div *ngIf="showResults && broadcastResult" class="results-section">
-      <h3>{{ broadcastResult?.success ? '✓ Envío completado' : '✗ Error en el envío' }}</h3>
-      <p [class.success]="broadcastResult?.success" [class.error]="!broadcastResult?.success">
-        {{ broadcastResult?.message }}
-      </p>
-      
-      <div *ngIf="broadcastResult.results && broadcastResult.results.length > 0" class="results-details">
-        <div class="result-summary">
-          <div class="summary-item">
-            <span class="count total">{{ broadcastResult.total }}</span>
-            <span class="label">Total</span>
+      <!-- Step 3: Message Content -->
+      <div class="form-step">
+        <div class="step-header">
+          <span class="step-number">3</span>
+          <h3>Contenido del mensaje</h3>
+        </div>
+        
+        <div class="message-editor">
+          <div class="editor-toolbar">
+            <button type="button" class="btn-sectorial-green" (click)="insertVariable('{nombre}')">
+              <span class="btn-icon">👤</span>
+              Insertar nombre
+            </button>
+            <div class="character-count">
+              {{ broadcastForm.get('message')?.value?.length || 0 }}/1000
+            </div>
           </div>
-          <div class="summary-item">
-            <span class="count success">{{ broadcastResult.sent }}</span>
-            <span class="label">Enviados</span>
-          </div>
-          <div class="summary-item">
-            <span class="count failed">{{ broadcastResult.failed }}</span>
-            <span class="label">Fallidos</span>
+          
+          <textarea 
+            id="message" 
+            formControlName="message" 
+            class="message-textarea"
+            placeholder="Escribe tu mensaje aquí...&#10;&#10;Puedes usar {nombre} para personalizar el mensaje con el nombre de cada contacto.&#10;&#10;Ejemplo: Hola {nombre}, tenemos una oferta especial para ti..."
+            rows="6"
+          ></textarea>
+          
+          <div class="message-preview" *ngIf="broadcastForm.get('message')?.value && excelContacts.length > 0">
+            <div class="preview-header">Vista previa:</div>
+            <div class="preview-content">
+              {{ getMessagePreview() }}
+            </div>
           </div>
         </div>
         
-        <div class="result-list">
-          <div *ngFor="let result of broadcastResult.results" class="result-item" [class.failed]="result.status === 'failed'">
-            <span class="status-icon">{{ result.status === 'sent' ? '✓' : '✗' }}</span>
-            <div class="contact-info">
-              <span class="name">{{ result.name || 'Sin nombre' }}</span>
-              <span class="phone">{{ result.phone }}</span>
+        <div 
+          class="field-error" 
+          *ngIf="broadcastForm.get('message')?.hasError('required') && broadcastForm.get('message')?.touched"
+        >
+          El mensaje es requerido
+        </div>
+      </div>
+
+      <!-- Step 4: Media Attachment -->
+      <div class="form-step">
+        <div class="step-header">
+          <span class="step-number">4</span>
+          <h3>Archivo multimedia <span class="optional">(opcional)</span></h3>
+        </div>
+        
+        <div class="media-upload-area" [class.has-media]="mediaFileName">
+          <input 
+            id="mediaFile" 
+            type="file" 
+            accept="image/*,video/*" 
+            (change)="onMediaFileChange($event)"
+            class="file-input"
+          />
+          <label for="mediaFile" class="media-upload-label">
+            <div class="media-icon">🖼️</div>
+            <div class="media-text">
+              <span class="media-title">
+                {{ mediaFileName || 'Adjuntar imagen o video' }}
+              </span>
+              <span class="media-subtitle">
+                Máximo 10MB - JPG, PNG, MP4, etc.
+              </span>
             </div>
-            <span *ngIf="result.error" class="error-message">{{ result.error }}</span>
+            <div class="media-actions">
+              <button type="button" class="btn-sectorial-green" *ngIf="!mediaFileName">
+                Seleccionar
+              </button>
+              <button type="button" class="btn-sectorial-red" *ngIf="mediaFileName" (click)="removeMediaFile(); $event.preventDefault()">
+                Quitar
+              </button>
+            </div>
+          </label>
+        </div>
+      </div>
+
+      <!-- Step 5: Schedule Options -->
+      <div class="form-step">
+        <div class="step-header">
+          <span class="step-number">5</span>
+          <h3>Opciones de envío</h3>
+        </div>
+        
+        <div class="schedule-options">
+          <label class="schedule-toggle">
+            <input type="checkbox" formControlName="schedule" class="toggle-input">
+            <span class="toggle-slider"></span>
+            <span class="toggle-label">Programar envío</span>
+          </label>
+          
+          <div *ngIf="broadcastForm.get('schedule')?.value" class="schedule-fields">
+            <div class="schedule-info">
+              <div class="timezone-info">
+                <span class="timezone-icon">🌎</span>
+                <span class="timezone-text">Hora de Colombia (GMT-5)</span>
+              </div>
+              <div class="current-time">
+                Hora actual: {{ getCurrentColombiaTime() }}
+              </div>
+            </div>
+            <div class="schedule-inputs">
+              <div class="input-group">
+                <label for="scheduleDate">📅 Fecha</label>
+                <input 
+                  type="date" 
+                  id="scheduleDate" 
+                  formControlName="scheduleDate"
+                  [min]="today | date: 'yyyy-MM-dd'"
+                  class="schedule-input"
+                >
+              </div>
+              <div class="input-group">
+                <label for="scheduleTime">🕐 Hora</label>
+                <input 
+                  type="time" 
+                  id="scheduleTime" 
+                  formControlName="scheduleTime"
+                  class="schedule-input"
+                >
+              </div>
+            </div>
+            <div class="schedule-preview" *ngIf="getSchedulePreview()">
+              <span class="preview-label">Se enviará:</span>
+              <span class="preview-time">{{ getSchedulePreview() }}</span>
+            </div>
           </div>
         </div>
       </div>
-      
-      <div class="result-actions">
-        <button type="button" class="secondary-btn" (click)="showResults = false">Cerrar</button>
+
+      <!-- Submit Button -->
+      <div class="form-actions">
         <button 
-          *ngIf="broadcastResult.failed && broadcastResult.failed > 0" 
-          type="button" 
-          class="primary-btn"
-          (click)="retryFailed()"
+          type="submit" 
+          [disabled]="isSending || broadcastForm.invalid || excelContacts.length === 0"
+          class="btn-sectorial-green submit-btn"
+          [class.loading]="isSending"
         >
-          Reintentar fallidos
+          <span class="btn-content">
+            <span *ngIf="isSending" class="loading-spinner"></span>
+            <span class="btn-icon" *ngIf="!isSending">🚀</span>
+            <span class="btn-text">
+              {{ getSubmitButtonText() }}
+            </span>
+          </span>
         </button>
+        
+        <div class="send-summary" *ngIf="excelContacts.length > 0 && !isSending">
+          Se enviará a <strong>{{ excelContacts.length }}</strong> contactos
+        </div>
+      </div>
+    </form>
+  </div>
+
+  <!-- Results Section -->
+  <div *ngIf="showResults && broadcastResult" class="results-card">
+    <div class="results-header">
+      <div class="result-icon" [class.success]="broadcastResult?.success" [class.error]="!broadcastResult?.success">
+        {{ getResultIcon() }}
+      </div>
+      <div class="result-title">
+        {{ getResultTitle() }}
       </div>
     </div>
-  </form>
-</section>
+    
+    <div class="result-message" [class.success]="broadcastResult?.success" [class.error]="!broadcastResult?.success">
+      {{ broadcastResult?.message }}
+    </div>
+
+    <!-- Additional Info for Scheduled Messages -->
+    <div *ngIf="broadcastResult?.success && isScheduledSend()" class="schedule-success-info">
+      <div class="schedule-info-item">
+        <span class="info-icon">📅</span>
+        <span class="info-text">
+          <strong>Programado para:</strong> {{ getScheduledTimeFormatted() }}
+        </span>
+      </div>
+      <div class="schedule-info-item">
+        <span class="info-icon">🌎</span>
+        <span class="info-text">
+          <strong>Zona horaria:</strong> Colombia (GMT-5)
+        </span>
+      </div>
+      <div class="schedule-info-item">
+        <span class="info-icon">📱</span>
+        <span class="info-text">
+          <strong>Contactos:</strong> {{ broadcastResult.total }} personas recibirán el mensaje
+        </span>
+      </div>
+      <div class="schedule-info-item">
+        <span class="info-icon">⏰</span>
+        <span class="info-text">
+          <strong>Estado:</strong> El envío se ejecutará automáticamente a la hora programada
+        </span>
+      </div>
+    </div>
+
+    <!-- Success message for immediate sends -->
+    <div *ngIf="broadcastResult?.success && !isScheduledSend() && broadcastResult.total" class="immediate-success-info">
+      <div class="success-summary">
+        <div class="summary-item">
+          <span class="summary-icon">🎉</span>
+          <span class="summary-text">
+            ¡Envío completado exitosamente! Se enviaron <strong>{{ broadcastResult.sent }}</strong> 
+            de <strong>{{ broadcastResult.total }}</strong> mensajes.
+          </span>
+        </div>
+        <div *ngIf="broadcastResult.failed && broadcastResult.failed > 0" class="summary-item warning">
+          <span class="summary-icon">⚠️</span>
+          <span class="summary-text">
+            <strong>{{ broadcastResult.failed }}</strong> mensajes no pudieron ser enviados. 
+            Puedes reintentar el envío de los fallidos.
+          </span>
+        </div>
+        <div class="summary-item">
+          <span class="summary-icon">⏱️</span>
+          <span class="summary-text">
+            Enviado el {{ getCurrentColombiaTime() }}
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    <div *ngIf="broadcastResult.results && broadcastResult.results.length > 0" class="results-details">
+      <div class="results-summary">
+        <div class="summary-stat">
+          <div class="stat-number total">{{ broadcastResult.total }}</div>
+          <div class="stat-label">Total</div>
+        </div>
+        <div class="summary-stat">
+          <div class="stat-number success">{{ broadcastResult.sent }}</div>
+          <div class="stat-label">Enviados</div>
+        </div>
+        <div class="summary-stat">
+          <div class="stat-number failed">{{ broadcastResult.failed }}</div>
+          <div class="stat-label">Fallidos</div>
+        </div>
+      </div>
+      
+      <div class="results-list">
+        <div class="results-list-header">
+          <h4>Detalle de envíos</h4>
+        </div>
+        <div class="result-items">
+          <div *ngFor="let result of broadcastResult.results" class="result-item" [class.failed]="result.status === 'failed'">
+            <div class="result-status">
+              <span class="status-icon">{{ result.status === 'sent' ? '✅' : '❌' }}</span>
+            </div>
+            <div class="result-contact">
+              <div class="contact-name">{{ result.name || 'Sin nombre' }}</div>
+              <div class="contact-phone">{{ result.phone }}</div>
+            </div>
+            <div *ngIf="result.error" class="result-error">{{ result.error }}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <div class="results-actions">
+      <button type="button" class="btn-sectorial-outline-green" (click)="showResults = false">
+        Cerrar
+      </button>
+      <button 
+        *ngIf="broadcastResult.failed && broadcastResult.failed > 0" 
+        type="button" 
+        class="btn-sectorial-red"
+        (click)="retryFailed()"
+      >
+        🔄 Reintentar fallidos
+      </button>
+      <button 
+        type="button" 
+        class="btn-sectorial-green"
+        (click)="createNewBroadcast()"
+      >
+        ✨ Nueva Difusión
+      </button>
+    </div>
+  </div>
+</div>

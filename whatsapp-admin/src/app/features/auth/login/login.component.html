@@ -1,0 +1,127 @@
+<div class="login-container">
+  <div class="login-card">
+    <!-- Header -->
+    <div class="login-header">
+      <div class="logo">
+        <div class="logo-icon">📱</div>
+        <h1>WhatsApp Manager</h1>
+      </div>
+      <p class="subtitle">Sistema de Gestión Multi-Rol</p>
+    </div>
+
+    <!-- Demo Users -->
+    <div class="demo-section">
+      <h3>Acceso Rápido - Usuarios Demo</h3>
+      <div class="demo-users">
+        <div 
+          *ngFor="let user of demoUsers" 
+          class="demo-user-card"
+          [style.border-left-color]="user.color"
+          (click)="loginWithDemo(user)"
+          [class.loading]="isLoading"
+        >
+          <div class="demo-user-icon">{{ user.icon }}</div>
+          <div class="demo-user-info">
+            <div class="demo-user-role">{{ user.role }}</div>
+            <div class="demo-user-desc">{{ user.description }}</div>
+            <div class="demo-user-creds">
+              <small>Usuario: <strong>{{ user.username }}</strong> | Contraseña: <strong>{{ user.password }}</strong></small>
+            </div>
+          </div>
+          <div class="demo-user-arrow">→</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Divider -->
+    <div class="divider">
+      <span>o ingresa manualmente</span>
+    </div>
+
+    <!-- Login Form -->
+    <form [formGroup]="loginForm" (ngSubmit)="onSubmit()" class="login-form">
+      <!-- Username Field -->
+      <div class="form-group">
+        <label for="username">Usuario</label>
+        <div class="input-wrapper">
+          <input
+            id="username"
+            type="text"
+            formControlName="username"
+            placeholder="Ingresa tu usuario"
+            [class.error]="username?.invalid && username?.touched"
+            autocomplete="username"
+          >
+          <div class="input-icon">👤</div>
+        </div>
+        <div 
+          *ngIf="username?.invalid && username?.touched" 
+          class="error-message"
+        >
+          <span *ngIf="username?.errors?.['required']">El usuario es requerido</span>
+          <span *ngIf="username?.errors?.['minlength']">El usuario debe tener al menos 3 caracteres</span>
+        </div>
+      </div>
+
+      <!-- Password Field -->
+      <div class="form-group">
+        <label for="password">Contraseña</label>
+        <div class="input-wrapper">
+          <input
+            id="password"
+            [type]="showPassword ? 'text' : 'password'"
+            formControlName="password"
+            placeholder="Ingresa tu contraseña"
+            [class.error]="password?.invalid && password?.touched"
+            autocomplete="current-password"
+          >
+          <button
+            type="button"
+            class="password-toggle"
+            (click)="togglePasswordVisibility()"
+            [attr.aria-label]="showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'"
+          >
+            {{ showPassword ? '🙈' : '👁️' }}
+          </button>
+        </div>
+        <div 
+          *ngIf="password?.invalid && password?.touched" 
+          class="error-message"
+        >
+          <span *ngIf="password?.errors?.['required']">La contraseña es requerida</span>
+          <span *ngIf="password?.errors?.['minlength']">La contraseña debe tener al menos 6 caracteres</span>
+        </div>
+      </div>
+
+      <!-- Error Message -->
+      <div *ngIf="errorMessage" class="error-alert">
+        <div class="error-icon">⚠️</div>
+        <div class="error-text">{{ errorMessage }}</div>
+      </div>
+
+      <!-- Submit Button -->
+      <button
+        type="submit"
+        class="login-button"
+        [disabled]="!isFormValid || isLoading"
+        [class.loading]="isLoading"
+      >
+        <span *ngIf="!isLoading">Iniciar Sesión</span>
+        <span *ngIf="isLoading" class="loading-content">
+          <div class="spinner"></div>
+          Iniciando sesión...
+        </span>
+      </button>
+    </form>
+
+    <!-- Footer -->
+    <div class="login-footer">
+      <p>Sistema de gestión de WhatsApp con múltiples roles</p>
+      <div class="features">
+        <span>✅ Multi-instancia</span>
+        <span>✅ Flujos inteligentes</span>
+        <span>✅ Análisis avanzado</span>
+      </div>
+    </div>
+  </div>
+</div>
