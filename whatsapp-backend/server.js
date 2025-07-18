@@ -266,8 +266,83 @@ app.use('/api/contacts', require('./routes/contacts'));
 app.use('/api/messages', require('./routes/messages'));
 app.use('/api/settings', require('./routes/settings'));
 
+// Función para configurar eventos del cliente
+function setupClientEvents(clientInstance) {
+    // Evento QR
+    clientInstance.on('qr', async (qr) => {
+        try {
+            const qrImageBase64 = await QRCode.toDataURL(qr, {
+                width: 256,
+                margin: 2,
+                color: {
+                    dark: '#000000',
+                    light: '#FFFFFF'
+                }
+            });
+            qrCodeData = qrImageBase64;
+            console.log('📱 Código QR generado. Escanea con tu teléfono:');
+            qrcode.generate(qr, { small: true });
+        } catch (error) {
+            console.error('Error generando QR como imagen:', error);
+            qrCodeData = qr;
+        }
+    });
+
+    // Evento autenticado
+    clientInstance.on('authenticated', () => {
+        console.log('✅ Cliente autenticado correctamente');
+        qrCodeData = null;
+    });
+
+    // Evento listo
+    clientInstance.on('ready', async () => {
+        isClientReady = true;
+        clientInfo = clientInstance.info;
+        console.log('🎉 WhatsApp Bot conectado y listo');
+        console.log(`📞 Conectado como: ${clientInfo.pushname} (${clientInfo.wid.user})`);
+    });
+
+    // Evento desconectado
+    clientInstance.on('disconnected', (reason) => {
+        console.error('🔌 Cliente desconectado:', reason);
+        isClientReady = false;
+        clientInfo = null;
+        qrCodeData = null;
+    });
+
+    // Manejar mensajes entrantes
+    clientInstance.on('message', async (message) => {
+        try {
+            if (message.from.endsWith('@c.us')) {
+                console.log(`📨 Mensaje recibido de ${message.from}: ${message.body}`);
+                
+                const incomingMessage = {
+                    id: message.id.id,
+                    from: message.from,
+                    fromName: message._data.notifyName || message.from,
+                    message: message.body,
+                    type: 'incoming',
+                    status: 'received',
+                    receivedAt: new Date().toISOString(),
+                    createdAt: new Date().toISOString()
+                };
+                
+                messages.push(incomingMessage);
+                saveMessages();
+
+                if (settings.autoReply && settings.autoReplyMessage) {
+                    await clientInstance.sendMessage(message.from, settings.autoReplyMessage);
+                    console.log(`🤖 Auto-respuesta enviada a ${message.from}`);
+                }
+            }
+        } catch (error) {
+            console.error('Error procesando mensaje entrante:', error);
+        }
+    });
+}
+
 // Inicializar cliente de WhatsApp
-const client = new Client({
+let client = new Client({
     authStrategy: new LocalAuth({
         clientId: "whatsapp-campaign-manager",
         dataPath: './session'
@@ -286,6 +361,9 @@ const client = new Client({
         ]
     }
 });
+
+// Configurar eventos y inicializar
+setupClientEvents(client);
 
 // Variables para gestión de estado
 let campaigns = [];
@@ -1920,6 +1998,274 @@ app.get('/api/status', (req, res) => {
         },
         uptime: process.uptime()
     });
+});
+
+// Desconectar WhatsApp y limpiar sesión completamente
+app.post('/api/disconnect', async (req, res) => {
+    try {
+        console.log('🔌 Solicitud de desconexión recibida');
+        
+        if (!isClientReady) {
+            return res.json({
+                success: true,
+                message: 'WhatsApp ya está desconectado'
+            });
+        }
+
+        console.log('🔄 Desconectando y limpiando sesión...');
+        
+        // Primero hacer logout para limpiar la sesión
+        try {
+            await client.logout();
+            console.log('✅ Logout exitoso');
+        } catch (logoutError) {
+            console.warn('⚠️ Error en logout:', logoutError.message);
+        }
+        
+        // Luego destruir el cliente
+        try {
+            await client.destroy();
+            console.log('✅ Cliente destruido');
+        } catch (destroyError) {
+            console.warn('⚠️ Error al destruir cliente:', destroyError.message);
+        }
+        
+        // Resetear variables de estado
+        isClientReady = false;
+        clientInfo = null;
+        qrCodeData = null;
+        
+        // Limpiar archivos de sesión físicamente
+        const fs = require('fs');
+        const path = require('path');
+        
+        try {
+            const sessionPath = './session';
+            if (fs.existsSync(sessionPath)) {
+                fs.rmSync(sessionPath, { recursive: true, force: true });
+                console.log('✅ Archivos de sesión eliminados');
+            }
+        } catch (cleanupError) {
+            console.warn('⚠️ Error limpiando sesión:', cleanupError.message);
+        }
+        
+        console.log('✅ WhatsApp desconectado completamente');
+        
+        res.json({
+            success: true,
+            message: 'WhatsApp desconectado exitosamente. Sesión limpiada.'
+        });
+        
+    } catch (error) {
+        console.error('❌ Error al desconectar WhatsApp:', error);
+        
+        // Forzar reset de variables incluso si hay error
+        isClientReady = false;
+        clientInfo = null;
+        qrCodeData = null;
+        
+        res.json({
+            success: true,
+            message: 'WhatsApp desconectado (forzado)'
+        });
+    }
+});
+
+// Generar nuevo QR / Reconectar
+app.post('/api/generate-qr', async (req, res) => {
+    try {
+        console.log('📱 Solicitud de generación de QR recibida');
+        
+        // Si ya está conectado, no hacer nada
+        if (isClientReady) {
+            return res.json({
+                success: false,
+                message: 'WhatsApp ya está conectado. Desconecta primero si quieres cambiar de cuenta.'
+            });
+        }
+
+        console.log('🚀 Creando nuevo cliente para generar QR...');
+        
+        // Limpiar estado actual
+        isClientReady = false;
+        clientInfo = null;
+        qrCodeData = null;
+        
+        // Destruir cliente actual si existe
+        try {
+            if (client) {
+                await client.destroy();
+                console.log('🧹 Cliente anterior destruido');
+            }
+        } catch (destroyError) {
+            console.warn('⚠️ Error al destruir cliente anterior:', destroyError);
+        }
+
+        // Esperar un momento para que se liberen los recursos
+        await new Promise(resolve => setTimeout(resolve, 1500));
+
+        // Crear nuevo cliente
+        const { Client, LocalAuth } = require('whatsapp-web.js');
+        
+        client = new Client({
+            authStrategy: new LocalAuth({
+                clientId: "whatsapp-campaign-manager",
+                dataPath: './session'
+            }),
+            puppeteer: {
+                headless: true,
+                args: [
+                    '--no-sandbox',
+                    '--disable-setuid-sandbox',
+                    '--disable-dev-shm-usage',
+                    '--disable-accelerated-2d-canvas',
+                    '--no-first-run',
+                    '--no-zygote',
+                    '--single-process',
+                    '--disable-gpu'
+                ]
+            }
+        });
+
+        // Configurar eventos del nuevo cliente
+        setupClientEvents(client);
+        
+        // Inicializar
+        client.initialize();
+        
+        console.log('✅ Nuevo cliente inicializado, esperando QR...');
+        
+        res.json({
+            success: true,
+            message: 'Generando nuevo código QR...'
+        });
+        
+    } catch (error) {
+        console.error('❌ Error al generar QR:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error al generar QR: ' + error.message
+        });
+    }
+});
+
+// Desconectar WhatsApp y limpiar sesión
+app.post('/api/disconnect', async (req, res) => {
+    try {
+        console.log('🔌 Solicitud de desconexión recibida');
+        
+        if (!isClientReady) {
+            return res.json({
+                success: true,
+                message: 'WhatsApp ya está desconectado'
+            });
+        }
+
+        // Desconectar el cliente
+        console.log('🔄 Desconectando cliente...');
+        await client.logout();
+        await client.destroy();
+        
+        // Resetear variables de estado
+        isClientReady = false;
+        clientInfo = null;
+        qrCodeData = null;
+        
+        console.log('✅ WhatsApp desconectado exitosamente');
+        
+        res.json({
+            success: true,
+            message: 'WhatsApp desconectado exitosamente'
+        });
+        
+    } catch (error) {
+        console.error('❌ Error al desconectar WhatsApp:', error);
+        
+        // Forzar reset de variables incluso si hay error
+        isClientReady = false;
+        clientInfo = null;
+        qrCodeData = null;
+        
+        res.json({
+            success: true,
+            message: 'WhatsApp desconectado (forzado)'
+        });
+    }
+});
+
+// Generar nuevo QR / Reconectar
+app.post('/api/generate-qr', async (req, res) => {
+    try {
+        console.log('📱 Solicitud de generación de QR recibida');
+        
+        // Si ya está conectado, no hacer nada
+        if (isClientReady) {
+            return res.json({
+                success: false,
+                message: 'WhatsApp ya está conectado. Desconecta primero si quieres cambiar de cuenta.'
+            });
+        }
+
+        // Limpiar estado actual
+        isClientReady = false;
+        clientInfo = null;
+        qrCodeData = null;
+        
+        // Destruir cliente actual si existe
+        try {
+            if (client) {
+                await client.destroy();
+                console.log('🧹 Cliente anterior destruido');
+            }
+        } catch (destroyError) {
+            console.warn('⚠️ Error al destruir cliente anterior:', destroyError);
+        }
+
+        // Esperar un momento para que se liberen los recursos
+        await new Promise(resolve => setTimeout(resolve, 2000));
+
+        // Crear nuevo cliente
+        console.log('🚀 Creando nuevo cliente...');
+        const { Client, LocalAuth } = require('whatsapp-web.js');
+        
+        global.client = new Client({
+            authStrategy: new LocalAuth({
+                clientId: "whatsapp-campaign-manager",
+                dataPath: './session'
+            }),
+            puppeteer: {
+                headless: true,
+                args: [
+                    '--no-sandbox',
+                    '--disable-setuid-sandbox',
+                    '--disable-dev-shm-usage',
+                    '--disable-accelerated-2d-canvas',
+                    '--no-first-run',
+                    '--no-zygote',
+                    '--single-process',
+                    '--disable-gpu'
+                ]
+            }
+        });
+
+        // Configurar eventos del nuevo cliente
+        setupClientEvents(global.client);
+        
+        // Inicializar
+        global.client.initialize();
+        
+        res.json({
+            success: true,
+            message: 'Generando nuevo código QR...'
+        });
+        
+    } catch (error) {
+        console.error('❌ Error al generar QR:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error al generar QR: ' + error.message
+        });
+    }
 });
 
 

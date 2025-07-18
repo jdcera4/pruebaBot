@@ -17,6 +17,8 @@ export class DashboardComponent implements OnInit, OnDestroy {
   errorMsg = '';
   isConnected = false;
   needsQR = false;
+  isDisconnecting = false;
+  isGeneratingQR = false;
   private qrCheckSubscription?: Subscription;
 
   constructor(private whatsappService: WhatsappService) {}
@@ -99,5 +101,81 @@ export class DashboardComponent implements OnInit, OnDestroy {
   refreshQr(): void {
     this.qrData = null;
     this.checkQrStatus();
+  }
+
+  disconnectWhatsApp(): void {
+    if (!confirm('¿Estás seguro de que quieres desconectar WhatsApp? Se cerrará la sesión actual y tendrás que escanear un nuevo código QR para reconectar.')) {
+      return;
+    }
+
+    this.isDisconnecting = true;
+    this.errorMsg = '';
+
+    this.whatsappService.disconnect().subscribe({
+      next: (response) => {
+        console.log('WhatsApp desconectado exitosamente:', response);
+        
+        // Resetear estado inmediatamente
+        this.isConnected = false;
+        this.needsQR = false;
+        this.qrData = null;
+        this.isDisconnecting = false;
+        
+        // Detener polling actual si existe
+        if (this.qrCheckSubscription) {
+          this.qrCheckSubscription.unsubscribe();
+        }
+        
+        // Mostrar mensaje de éxito
+        this.errorMsg = '';
+        console.log('✅ Desconexión completada. Usa "Generar Nuevo QR" para conectar otra cuenta.');
+      },
+      error: (error) => {
+        console.error('Error al desconectar WhatsApp:', error);
+        this.errorMsg = 'Error al desconectar WhatsApp: ' + error.message;
+        this.isDisconnecting = false;
+      }
+    });
+  }
+
+  generateNewQR(): void {
+    this.isGeneratingQR = true;
+    this.errorMsg = '';
+    this.qrData = null;
+
+    this.whatsappService.generateQR().subscribe({
+      next: (response) => {
+        console.log('Generación de QR iniciada:', response);
+        
+        if (response.success) {
+          // Resetear estado para mostrar QR
+          this.isConnected = false;
+          this.needsQR = true;
+          this.qrData = null;
+          this.isGeneratingQR = false;
+          
+          // Detener polling actual si existe
+          if (this.qrCheckSubscription) {
+            this.qrCheckSubscription.unsubscribe();
+          }
+          
+          // Esperar un momento y luego iniciar polling para el nuevo QR
+          setTimeout(() => {
+            console.log('🔄 Iniciando polling para nuevo QR...');
+            this.startQrPolling();
+          }, 2000);
+          
+          this.errorMsg = '';
+        } else {
+          this.errorMsg = response.message;
+          this.isGeneratingQR = false;
+        }
+      },
+      error: (error) => {
+        console.error('Error al generar QR:', error);
+        this.errorMsg = 'Error al generar QR: ' + error.message;
+        this.isGeneratingQR = false;
+      }
+    });
   }
 }

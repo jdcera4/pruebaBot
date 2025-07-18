@@ -180,6 +180,40 @@ export class WhatsappService {
       );
   }
 
+  // Disconnect from WhatsApp
+  disconnect(): Observable<{ success: boolean; message: string }> {
+    return this.http.post<{ success: boolean; message: string }>(`${this.apiUrl}/disconnect`, {})
+      .pipe(
+        map(response => {
+          this.updateConnectionStatus({
+            status: 'disconnected',
+            connected: false,
+            qrCode: undefined
+          });
+          return response;
+        }),
+        catchError(this.handleError)
+      );
+  }
+
+  // Generate new QR code
+  generateQR(): Observable<{ success: boolean; message: string }> {
+    return this.http.post<{ success: boolean; message: string }>(`${this.apiUrl}/generate-qr`, {})
+      .pipe(
+        map(response => {
+          if (response.success) {
+            this.updateConnectionStatus({
+              status: 'connecting',
+              connected: false,
+              qrCode: undefined
+            });
+          }
+          return response;
+        }),
+        catchError(this.handleError)
+      );
+  }
+
 
 
   // ======= Conversation Flow Methods =======

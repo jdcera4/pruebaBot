@@ -18,6 +18,29 @@
         {{ isConnected ? 'WhatsApp Conectado' : 'WhatsApp Desconectado' }}
       </span>
     </div>
+    
+    <!-- Connection Actions -->
+    <div class="connection-actions">
+      <!-- Disconnect Button (only when connected) -->
+      <button 
+        *ngIf="isConnected" 
+        class="btn-disconnect" 
+        (click)="disconnectWhatsApp()"
+        [disabled]="isDisconnecting">
+        <span *ngIf="!isDisconnecting">🔌 Desconectar</span>
+        <span *ngIf="isDisconnecting">⏳ Desconectando...</span>
+      </button>
+      
+      <!-- Generate QR Button (only when disconnected) -->
+      <button 
+        *ngIf="!isConnected" 
+        class="btn-generate-qr" 
+        (click)="generateNewQR()"
+        [disabled]="isGeneratingQR">
+        <span *ngIf="!isGeneratingQR">📱 Generar Nuevo QR</span>
+        <span *ngIf="isGeneratingQR">⏳ Generando QR...</span>
+      </button>
+    </div>
   </div>
 
   <!-- QR Code Section -->
